@@ -144,6 +144,27 @@ HOST USED FOR RE-MEASUREMENT
   [done] reports/ is now tracked, so the JSON artifacts cited by the manuscript
          ship with the repository instead of being silently gitignored.
 
+--------------------------------------------------------------------------------
+7. MANUSCRIPT BUILD INTEGRITY NOTE (layout, not performance)
+--------------------------------------------------------------------------------
+  While re-verifying the submission bundle we found that the JISA build script
+  (draft/create_jisa_paper.py) resolved its section anchors with str.find() and
+  did not check the result.  Two anchors no longer matched the manuscript
+  headings; str.find() returned -1, and the slice src[-1:N] silently returned
+  almost the entire document.  The assembled .tex therefore contained two copies
+  of the paper (two bibliographies, two \end{document}), and pdflatex
+  mis-parsed the first \end{document => 81 pages with duplicated content.
+
+  Fix: anchors now match the real headings, a failing anchor raises SystemExit,
+  and the assembled file is asserted to contain exactly one bibliography and one
+  \end{document}.  The rebuilt manuscript is 70 pages with no LaTeX errors.
+
+  This affects document layout only; it does not touch any measured value
+  reported in sections 1-6.
+
+================================================================================
+
+
 ================================================================================
 
   must NOT cite its absolute cpb values as a headline claim; only the
