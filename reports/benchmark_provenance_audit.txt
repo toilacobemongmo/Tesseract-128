@@ -147,17 +147,23 @@ HOST USED FOR RE-MEASUREMENT
 --------------------------------------------------------------------------------
 7. MANUSCRIPT BUILD INTEGRITY NOTE (layout, not performance)
 --------------------------------------------------------------------------------
-  While re-verifying the submission bundle we found that the JISA build script
-  (draft/create_jisa_paper.py) resolved its section anchors with str.find() and
-  did not check the result.  Two anchors no longer matched the manuscript
-  headings; str.find() returned -1, and the slice src[-1:N] silently returned
-  almost the entire document.  The assembled .tex therefore contained two copies
-  of the paper (two bibliographies, two \end{document}), and pdflatex
-  mis-parsed the first \end{document => 81 pages with duplicated content.
+  While re-verifying the submission bundle we found that the manuscript build
+  script (now paper/create_paper.py, formerly draft/create_jisa_paper.py)
+  resolved its section anchors with str.find() and did not check the result.
+  Two anchors no longer matched the manuscript headings; str.find() returned -1,
+  and the slice src[-1:N] silently returned almost the entire document.  The
+  assembled .tex therefore contained two copies of the paper (two
+  bibliographies, two \end{document}), and pdflatex mis-parsed the first
+  \end{document => 81 pages with duplicated content.
 
   Fix: anchors now match the real headings, a failing anchor raises SystemExit,
   and the assembled file is asserted to contain exactly one bibliography and one
   \end{document}.  The rebuilt manuscript is 70 pages with no LaTeX errors.
+
+  The manuscript source and its build chain were subsequently consolidated into
+  paper/ (manuscript.tex, create_paper.py, generate_figures.py, build_paper.ps1)
+  to remove the mutual-overwrite hazard between create_jisa_paper.py and
+  sync_jisa_to_article.py, which is what had corrupted the source once already.
 
   This affects document layout only; it does not touch any measured value
   reported in sections 1-6.

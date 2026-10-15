@@ -1,0 +1,24 @@
+CRediT Author Statement (Contributor Roles Taxonomy)
+
+Manuscript Title: Tesseract-128: A 128-Bit Symmetric Block Cipher Integrating 4D Hypercube Permutations and ARX Diffusion for Constrained Telemetry Networks
+Journal: [Target journal to be filled in at submission time]
+Author: Hao Gia Nguyen
+Affiliation: Faculty of Information Security, Posts and Telecommunications Institute of Technology (PTIT), Hanoi, Vietnam
+Corresponding Author Email: haong.b24at088@stu.ptit.edu.vn
+
+CRediT Taxonomy Roles:
+Hao Gia Nguyen: Conceptualization, Methodology, Software, Validation, Formal analysis, Investigation, Resources, Data curation, Writing - original draft, Writing - review & editing, Visualization, Project administration.
+
+Detailed Contributor Role Descriptions:
+- Conceptualization: Formulation of the novel 128-bit block cipher concept, mapping the 16-byte state to 4D hypercube coordinate vertices {0,1}^4, and designing the hybrid integration of SO(4) double-isoclinic rotations with 32-bit ARX modular carry-ripple diffusion for non-AES-NI microcontrollers.
+- Methodology: Mathematical formulation of chiral hyperoctahedral group B_4^+ transformations, algebraic transitivity and subspace non-invariance proofs, Mixed-Integer Linear Programming (MILP) model constraints for active S-box lower bounding, and automated miss-in-the-middle search techniques.
+- Software: Implementation of constant-time scalar C/C++ cipher engines, vectorized AVX2/SSSE3 byte-shuffling (pshufb) intrinsics, Python PuLP MILP automated search solvers for differential and linear trails, and CAN-FD/IoT telemetry latency benchmarking testbenches.
+- Validation: Experimental design, execution, and statistical validation of NIST SP 800-22 Rev. 1a and GM/T 0005-2021 randomness suites, integral attack multiset simulation across 1,280 Lambda-sets, and cycle-accurate hardware rdtsc execution profiling.
+- Formal analysis: Mathematical proof derivations for differential active S-box lower bounds (>= 78 active S-boxes, P_diff <= 2^-468) and linear active S-box lower bounds (>= 108), algebraic degree growth analysis, and slide/related-key immunity proofs.
+- Investigation: Profiling memory footprints across microarchitectures, cache-collision analysis against 4 KB AES T-tables, and empirical evaluation of CAN-FD 64-byte frame transmission overhead in constrained automotive telemetry.
+- Resources: Acquisition and configuration of computational testing environments, bare-metal microcontroller simulation environments, and x86-64 benchmarking hardware platforms.
+- Data curation: Management, archiving, and cataloging of empirical execution logs, MILP characteristic trail solutions, and statistical randomness output data.
+- Writing - Original Draft: Complete authoring of the original manuscript text, mathematical theorems, algorithms, technical diagrams, and performance analysis.
+- Writing - Review & Editing: Critical revision and refinement of the manuscript, incorporation of peer-review feedback, tightening of cryptographic scopes, and final manuscript preparation.
+- Visualization: Design and rendering of TikZ architectural diagrams, hypercube coordinate projections, differential characteristic trail cascades, and comparative performance plots.
+- Project administration: Project management, task planning, version control governance, repository stewardship, and journal submission packaging.

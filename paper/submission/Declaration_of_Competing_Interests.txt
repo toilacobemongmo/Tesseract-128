@@ -1,0 +1,21 @@
+Declaration of Competing Interests
+
+Manuscript Title: Tesseract-128: A 128-Bit Symmetric Block Cipher Integrating 4D Hypercube Permutations and ARX Diffusion for Constrained Telemetry Networks
+Journal: [Target journal to be filled in at submission time]
+Author: Hao Gia Nguyen
+Affiliation: Faculty of Information Security, Posts and Telecommunications Institute of Technology (PTIT), Hanoi, Vietnam
+Corresponding Author Email: haong.b24at088@stu.ptit.edu.vn
+
+Declaration:
+The author declares that they have no known competing financial interests or personal relationships that could have appeared to influence the work reported in this paper.
+
+Specific Disclosures:
+- Employment: Faculty of Information Security, Posts and Telecommunications Institute of Technology (PTIT). No commercial employment conflicts.
+- Financial Interests: None.
+- Consultancies or Advisory Roles: None.
+- Stock Ownership or Equity: None.
+- Honoraria or Grants: This research received no specific grant from any funding agency in the public, commercial, or not-for-profit sectors.
+- Patents: No patents filed or pending related to this work.
+
+Author Signature: Hao Gia Nguyen
+Date: October 11, 2026

@@ -27,6 +27,11 @@ Thumbs.db
 build/
 bin/
 *.log
+paper/build/*.aux
+paper/build/*.log
+paper/build/*.out
+paper/build/*.pdf
+paper/build/*.tex
 
 # The reports/ directory is NOT ignored: it holds the machine-readable result
 # artifacts (benchmark.json, sensitivity.json, key_schedule_sac.json, ...) that

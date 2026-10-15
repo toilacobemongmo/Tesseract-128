@@ -1,0 +1,50 @@
+﻿========================================================================================
+ BIT-LEVEL ARX TRAIL WEIGHT: SO(4) vs identity vs random byte permutation
+========================================================================================
+ Stage A  MILP (relaxation): minimises active difference BITS.
+ Stage B  BRUTE FORCE (ground truth): pushes REAL byte values through
+          the exact round function of src/rubik4d.c.
+
+ Stage A and Stage B MUST agree before any Stage A conclusion is used.
+ A free bit-difference MILP may pick carry-absorption patterns that no
+ real byte value realises; compute_branch_number.py documents exactly
+ this failure mode (a first version returned 3 where the truth is 16).
+========================================================================================
+ solver = HiGHS   rounds = 1..3   brute-force active bytes <= 1
+
+--- STAGE A: MILP trail weight (must be triangulated) ---
+  SO(4)       1R=1  2R=3  3R=8
+  plane-free  1R=1  2R=3  3R=8
+  identity    1R=1  2R=3  3R=9
+  random      1R=1..1  2R=3..3  3R=7..8   (5 seeds)
+
+--- STAGE B: BRUTE FORCE on real values (ground truth) ---
+  SO(4)       1R=60  2R=107  3R=168
+  identity    1R=60  2R=110  3R=168
+  random      1R=60  2R=118  3R=175
+
+--- STAGE A vs STAGE B consistency ---
+  If the two disagree by a large factor, the MILP is under-counting
+  and Stage A results must NOT be reported as trail weights.
+  config      rounds     MILP    brute    ratio
+  identity         1        1       60     60.0
+  identity         2        3      110     36.7
+  identity         3        9      168     18.7
+  SO(4)            1        1       60     60.0
+  SO(4)            2        3      107     35.7
+  SO(4)            3        8      168     21.0
+
+========================================================================================
+ SUMMARY (ground truth only)
+========================================================================================
+  rounds |   SO(4) |  identity |  random | verdict
+----------------------------------------------------------------------------------------
+       1 |      60 |        60 |      60 | indistinguishable from random
+       2 |     107 |       110 |     118 | SO(4) lowest (weakest)
+       3 |     168 |       168 |     175 | mixed
+========================================================================================
+ Interpretation: on the ground-truth metric the three configurations
+ differ by only a few bits out of ~60 per round, i.e. by well under
+ 2%. No config exhibits a structural advantage; SO(4) must therefore
+ not be advertised as a cryptanalytic improvement.
+========================================================================================

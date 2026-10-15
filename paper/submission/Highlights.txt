@@ -1,0 +1,4 @@
+- Tesseract-128 couples 4D Lie group SO(4) rotations with 32-bit ARX diffusion.
+- Tool-aided (word-level MILP) bounds: >=78 active S-boxes (P<=2^-468), >=108 linear.
+- Requires only 192-byte lookup tables, avoiding L1 cache-timing side channels.
+- AVX2 SIMD reaches 254 MB/s; CAN-FD 64B latency is reduced 2.88x over AES.

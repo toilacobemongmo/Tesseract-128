@@ -1,0 +1,55 @@
+To:
+The Editor-in-Chief
+
+[Target journal to be filled in at submission time. This manuscript is
+prepared journal-neutrally and is suitable, unchanged, for: Journal of
+Information Security and Applications; IEEE Access; Computers & Security;
+Cryptography (MDPI); Applied Sciences (MDPI).]
+
+Subject: Submission of Original Research Manuscript "Tesseract-128: A 128-Bit Symmetric Block Cipher Integrating 4D Hypercube Permutations and ARX Diffusion for Constrained Telemetry Networks"
+
+Dear Editor-in-Chief,
+
+I am pleased to submit our original research manuscript titled "Tesseract-128: A 128-Bit Symmetric Block Cipher Integrating 4D Hypercube Permutations and ARX Diffusion for Constrained Telemetry Networks" for publication consideration as a regular research article in the target journal named above.
+
+1. Operational Context and Practical Motivation:
+Although conventional literature demonstrates that software AES implementations achieve acceptable throughput via precomputed lookup tables, their substantial 4,096-byte memory footprint frequently induces acute L1 data-cache eviction and exposes timing side channels on microcontrollers lacking AES-NI. In modern cyber-physical systems, automotive CAN-FD in-vehicle communication, and constrained telemetry networks (such as CoAP and MQTT-SN), edge microcontrollers lack dedicated hardware cryptographic accelerators (e.g., AES-NI) and possess restricted on-chip cache memory. Conversely, pure ARX ciphers (e.g., SIMON and SPECK) lack closed-form wide-trail security arguments and require high round counts (32 to 68 rounds) that penalize short-packet transmission latency.
+
+2. Architectural Contribution and Mathematical Formulation:
+To resolve this fundamental operational trade-off, this manuscript introduces Tesseract-128, demonstrating that coupling discrete double-isoclinic rotations from the Lie group SO(4) with 32-bit Add-Rotate-XOR modular diffusion disperses byte coordinates across orthogonal planes without invariant subspaces, requiring only 192 bytes of static lookup tables. By mapping the 16-byte cipher state onto the vertices of a 4D hypercube {0,1}^4, the linear layer achieves algebraic transitivity and optimal diffusion while fitting completely within a single 256-byte cache line or micro-SRAM scratchpad, completely eliminating table-induced cache-collision attacks.
+
+3. Automated Cryptanalysis and Empirical Performance:
+Within a word-level MILP model of the ARX carry chain, automated searches establish lower bounds of 78 active S-boxes against differential cryptanalysis (P_diff <= 2^-468 < 2^-128) and 108 active S-boxes against linear cryptanalysis across 8 rounds; these are model-relative bounds rather than proofs of security, and they are consistent with our empirical hardware benchmarks achieving a 2.88x encryption latency reduction over software AES on 64-byte automotive CAN-FD telemetry frames.
+Key rigorous verification findings established in this work include:
+- Tool-Aided Security Margins: Within a word-level truncated-differential MILP model, a lower bound of >= 78 active S-boxes is obtained against differential cryptanalysis (P_diff <= 2^-468 < 2^-128) and >= 108 against linear cryptanalysis over 8 rounds; this is a model-relative bound, not a proof of immunity.
+- Miss-in-the-Middle Termination: Automated searches establish zero impossible differential and zero-correlation trails at >= 5 rounds, securing a comfortable 4-round safety margin.
+- Multiset Integral Balance: Simulations across 1,280 Lambda-sets (16 active positions x 20 keys) confirm multiset balance termination by Round 4.
+- Statistical Randomness: Generated keystreams pass all 15 statistical tests in NIST SP 800-22 Rev. 1a and GM/T 0005-2021 without exception.
+- Hardware Acceleration: SIMD vectorization (AVX2/SSSE3) achieves single-cycle permutation execution via pshufb, delivering 254.18 MB/s in CTR mode and 208.80 MB/s in authenticated Tesseract-GCM mode.
+- Real-World Telemetry Impact: In an automotive CAN-FD testbed, Tesseract-GCM processes 64-byte frames in 1,267 clock cycles (~0.37 us at 3.4 GHz), representing a 2.88x speedup over software AES and adding under 0.3% transmission overhead to the physical bus.
+
+4. Alignment with Journal Scope:
+This manuscript aligns directly with the core scope of a general information-security and applied-cryptography venue, specifically addressing applied symmetric cryptography, lightweight primitives for constrained IoT and automotive networks, automated cryptanalysis, and empirical hardware/software evaluation. In accordance with open science practices, all C/C++ reference code, AVX2 SIMD intrinsics, Python PuLP MILP solvers, and testbenches are publicly accessible at https://github.com/toilacobemongmo/Tesseract-128.
+
+5. Suggested Independent Reviewers:
+To facilitate rigorous peer review, we suggest the following four independent international experts who possess specialized expertise in symmetric block ciphers, automated MILP cryptanalysis, ARX primitives, and lightweight implementations:
+1. Dr. Hojjat Hadipour (Graz University of Technology / IAIK, Austria) - World-leading expert in automated MILP/SAT cryptanalysis of ARX and symmetric block ciphers.
+2. Dr. Christof Beierle (Ruhr University Bochum, Germany) - Expert in ARX-box design, Alzette primitive, and provable bounds in lightweight cryptography.
+3. Dr. Daniel Dinu (University of Luxembourg, Luxembourg) - Expert in SPARX, provable ARX bounds, and embedded software cryptographic benchmarking.
+4. Dr. Subhadeep Banik (Università della Svizzera italiana, Switzerland) - Expert in lightweight block ciphers (PRESENT, Midori) and hardware/software microarchitecture.
+
+6. Author Declarations and Ethical Statements:
+- Originality: This manuscript describes original research that has not been published previously and is not under concurrent consideration for publication elsewhere.
+- Sole Authorship: The undersigned author is the sole contributor to the conceptualization, mathematical derivation, software implementation, validation, and manuscript preparation.
+- Competing Interests: The author declares no known competing financial interests or personal relationships that could have influenced the findings reported in this paper.
+- Ethical Compliance: All experimental methodologies and benchmarking protocols adhere to international academic standards and ethical guidelines.
+
+Thank you very much for your time, consideration, and handling of our manuscript.
+
+Sincerely,
+
+Hao Gia Nguyen
+Faculty of Information Security
+Posts and Telecommunications Institute of Technology (PTIT)
+Km 10 Nguyen Trai Road, Ha Dong District, Hanoi, Vietnam
+Official Corresponding Email: haong.b24at088@stu.ptit.edu.vn

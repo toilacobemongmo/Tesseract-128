@@ -1,0 +1,689 @@
+TITLE: Tesseract-128: A 128-Bit Symmetric Block Cipher Integrating 4D Hypercube Permutations and ARX Diffusion for Constrained Telemetry Networks
+AUTHOR: Hao Gia Nguyen (Faculty of Information Security, Posts and Telecommunications Institute of Technology, Hanoi, Vietnam)
+EMAIL: haong.b24at088@stu.ptit.edu.vn
+
+ABSTRACT:
+We propose Tesseract-128, a 128-bit symmetric block cipher designed for resource-constrained telemetry and embedded platforms that lack hardware AES acceleration (such as ARM Cortex-M microcontrollers, small RISC-V cores, and automotive control units without AES-NI). On architectures without dedicated cryptographic instructions, conventional software AES implementations present an acute trade-off: 4 KB precomputed lookup tables (T-tables) provide acceptable throughput but exhaust small embedded caches and expose timing vulnerabilities to cache-collision attacks, whereas table-free finite-field matrix multiplications incur severe computational penalties. Tesseract-128 eliminates this trade-off by replacing Galois field matrix operations with spatial permutations on a four-dimensional hypercube 0,1^4 and 32-bit Addition-Rotation-XOR (ARX) modular diffusion. The spatial layer applies discrete double-isoclinic rotations from the Lie group SO(4) across orthogonal 2D planes, requiring an ultra-compact table footprint of only 192 bytes (21 times smaller than AES T-tables), which fits entirely within a single cache line or on-chip scratchpad SRAM. Mixed-integer linear programming (MILP) models, with exact ARX carry expansion, yield lower bounds of at least 78 active S-boxes against differential cryptanalysis (P_diff <= 2^-468 < 2^-128) and 108 active S-boxes against linear cryptanalysis within the modeled round structure. Miss-in-the-middle searches find that impossible differential, zero-correlation, and integral distinguishers terminate by round 4 in the truncated word-level model, leaving a 4-round margin relative to that model. In scalar software execution without hardware extensions, Tesseract-128 delivers 20.20 cycles/byte (166.56 MB/s), outperforming software AES-128 by 23.0\
+
+KEYWORDS:
+Symmetric block cipher, Non-AES-NI architectures, 4D hypercube, SO(4) isometry permutation, ARX diffusion, MILP cryptanalysis, Authenticated encryption (AEAD), CAN-FD telemetry.
+
+==================================================
+SECTION: Introduction
+==================================================
+
+Symmetric block ciphers deployed in real-time industrial telemetry, automotive bus controllers (CAN-FD), and remote sensor networks must guarantee provable cryptographic security within tight memory and latency bounds . While server and desktop processors benefit from dedicated hardware instruction extensions (such as x86 AES-NI or ARM Cryptography Extensions) that evaluate AES rounds in sub-cycle hardware pipelines, the vast majority of deployed edge microcontrollers - including ARM Cortex-M0+/M3/M4, low-cost RISC-V cores, and legacy automotive Electronic Control Units (ECUs) - lack dedicated cryptographic coprocessors .
+
+In the absence of hardware AES acceleration, existing symmetric ciphers impose difficult operational compromises:
+
+- The Software AES Trilemma: Substitution-Permutation Networks (SPNs) such as AES rely on Maximum Distance Separable (MDS) matrices over GF(2^8) to achieve rapid wide-trail branch diffusion . When executed in software without AES-NI, implementations must choose between two unfavorable alternatives:
+
+- Large lookup tables (T-tables): Precomputing the combined S-box and MDS matrix multiplication requires 4,096 bytes (4 KB) of lookup tables. In constrained microcontrollers with small SRAM or shared L1 data caches, this footprint causes continuous cache evictions and exposes execution time to cache-timing side-channel attacks .
+
+- Table-free Galois field arithmetic: Computing the polynomial reduction and xtime multiplication dynamically eliminates cache-timing leakage but incurs massive latency penalties, commonly requiring 50 to 100+ clock cycles per byte on 32-bit embedded cores.
+
+- Pure ARX and Heuristic Lightweight Ciphers: Lightweight designs such as SIMON, SPECK , and ChaCha20 rely exclusively on modular addition, bitwise rotations, and XOR over native register words. While computationally efficient, their non-linearity depends entirely on carry propagation across word boundaries. Because pure ARX structures lack analytic wide-trail bounds over finite fields, designers compensate by inflating round counts (e.g., 32 to 68 rounds), eroding their latency advantages on short telemetry frames.
+
+Hybrid architectures, such as the SPARX cipher family and the Alzette ARX-box primitive , demonstrate that combining compact non-linear substitutions with structured word diffusion can yield provable differential bounds alongside software efficiency. However, achieving rapid full-state cross-word diffusion across a 128-bit block in software without relying on heavy MDS matrix multiplications or large table footprints remains an open engineering problem.
+
+To resolve this challenge, we introduce Tesseract-128, a 128-bit symmetric block cipher specifically engineered for non-AES-NI environments. Tesseract-128 replaces finite-field matrix multiplications with discrete spatial permutations on a four-dimensional hypercube 0,1^4 coupled with 32-bit native ARX carry diffusion. The 16-byte internal state maps onto the 16 vertices of a 4D tesseract. Double-isoclinic rotations from the Lie group SO(4) permute bytes across orthogonal 2D planes without fixed axes, requiring a total table memory of only 192 bytes (12 tables x 16 bytes) - 21 times smaller than AES T-tables. A cyclic 32-bit ARX carry-ripple layer subsequently spreads word differences across the entire block, achieving full avalanche diffusion within three rounds.
+
+The primary contributions of this paper are:
+
+- Tesseract-128 Cipher Architecture: A hybrid SPN-ARX block cipher optimized for non-AES-NI architectures, pairing AES GF(2^8) S-boxes, an O(1) Lie group SO(4) hypercube permutation layer (192-byte table footprint), and a 32-bit native ARX carry-ripple diffusion layer.
+
+- Formal MILP Security Bounds: Automated Mixed-Integer Linear Programming models, at the word level and with exact ARX carry expansion, yield lower bounds of 78 active S-boxes against differential cryptanalysis (P_diff <= 2^-468 < 2^-128) and 108 active S-boxes against linear cryptanalysis across 8 rounds. These are bounds within the stated model, not proofs of immunity.
+
+- Comprehensive Cryptanalysis: Rigorous verification against impossible differential, integral, zero-correlation, slide, and related-key attacks, establishing complete structural resistance and a 4-round safety margin.
+
+- Embedded Microcontroller Feasibility Analysis: An explicit instruction budget breakdown demonstrating that 1 round of Tesseract-128 requires only 52 assembly instructions on 32-bit ARM Thumb-2 (Cortex-M3/M4) and RISC-V RV32I architectures, executing an entire 128-bit block in approximately 350-450 clock cycles without specialized vector or crypto coprocessors.
+
+- Empirical Software Benchmarks in Non-AES-NI Environments: In pure scalar C without hardware extensions, Tesseract-128 executes in 20.20 cycles/byte (166.56 MB/s), outperforming software AES-128 by 23.0\
+
+- Secondary Gateway SIMD Scaling & AEAD Mode: For telemetry gateways and edge aggregators lacking AES-NI, standard multimedia byte-shuffle instructions (pshufb/AVX2) scale throughput to 254.18 MB/s in CTR mode and 208.80 MB/s in authenticated Tesseract-GCM mode (NIST SP 800-38D).
+
+==================================================
+SECTION: Threat Model and Security Framework
+==================================================
+
+In this section, we define the threat model, adversary capabilities, and security criteria assumed throughout this paper:
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Adversary Capabilities and Attack Models
+- - - - - - - - - - - - - - - - -
+
+We evaluate Tesseract-128 under standard symmetric cryptanalytic models:
+
+- CPA and CCA Security Models: The adversary adaptively submits plaintexts and ciphertexts to encryption and decryption oracles. In Counter (CTR) mode, Tesseract-128 achieves indistinguishability under chosen-plaintext attack (IND-CPA). In authenticated Tesseract-GCM mode, the primitive provides indistinguishability under adaptive chosen-ciphertext attack (IND-CCA2) and existential unforgeability (EUF-CMA) with a full 128-bit security margin.
+
+- Related-Key Attack Model: In practical embedded deployments (such as automotive firmware updates or industrial key distribution protocols), master keys may be derived from correlated seeds. We analyze the resistance of Tesseract-128 under the chosen-related-key model, where an attacker injects arbitrary differences Delta K into the master key and observes resulting differential propagations across encryption and decryption.
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Microarchitectural Side-Channel Model
+- - - - - - - - - - - - - - - - -
+
+Symmetric ciphers deployed in embedded edge nodes frequently operate under the threat of microarchitectural side-channel attacks:
+
+- Cache-Timing Side Channels: On commodity processors without dedicated AES hardware, lookup tables with large footprint (such as 4 KB AES T-tables) cause cache-line evictions that correlate execution time with secret key bytes . Tesseract-128 limits its spatial permutation layer to an ultra-compact footprint of 192 bytes (12 tables x 16 bytes), fitting well within a single cache line or scratchpad SRAM.
+
+- Constant-Time SIMD Mode: When vectorized via SSSE3/AVX2 intrinsics, the spatial permutation executes via the single-cycle byte-shuffle instruction pshufb (_mm_\allowbreakshuffle_epi8), operating entirely in vector registers with data-independent execution time.
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Distinguishing Horizon vs. Key Recovery Horizon
+- - - - - - - - - - - - - - - - -
+
+In this paper, we strictly distinguish between:
+
+- Distinguishing Attacks: Identifying a non-random statistical property (e.g., differential trail probability P > 2^-128, linear correlation |epsilon| > 2^-64, or integral balanced multiset) over R reduced rounds. The cipher is considered secure against a distinguishing class if the required data complexity exceeds the exhaustive codebook (N_D > 2^128) or trail probability falls below brute-force search (P < 2^-128).
+
+- Key Recovery Attacks: Appending key-guessing rounds before or after a distinguishing core. In Section , we show that all structural distinguishers found by our searches vanish by Round 4, leaving a 4-round margin for the 8-round cipher within the models analyzed.
+
+==================================================
+SECTION: Related Work and Comparative Analysis
+==================================================
+
+Modern block ciphers balance three main design criteria: algebraic confusion, linear diffusion, and implementation efficiency across target platforms :
+
+- Dedicated Lightweight SPN Ciphers: PRESENT showed that ultra-compact 4-bit S-boxes combined with bit-level permutations were viable, optimized for ASIC implementations but penalized on software architectures by bit-slicing overhead. Midori and PRINCE optimized round functions for low-latency hardware, prioritizing energy per bit over software register throughput.
+
+- ARX and ARX-Box Architectures: SIMON and SPECK showed that ARX designs could be hardware- and software-friendly at once, achieving competitive speeds on resource-constrained platforms. Without formal wide-trail arguments, though, extensive MILP verification became necessary . Dinu et al. pushed toward provable bounds in ARX designs with SPARX, which embeds SpecX ARX-boxes in a Feistel network. At CRYPTO 2020, Beierle et al. formalized Alzette, a 64-bit ARX-box that leverages modular addition carries to generate rapid non-linear diffusion with verifiable bounds against differential cryptanalysis.
+
+- Automated Cryptanalysis Frameworks: Automated search via Mixed-Integer Linear Programming (MILP) and Boolean Satisfiability (SAT) is now the de facto standard for symmetric cipher evaluation. Mouha et al. pioneered MILP models for differential and linear characteristic search. Hadipour et al. extended automated searching to full impossible-differential, zero-correlation, and ARX differential trails, and Xiang et al. established MILP models for division property and integral cryptanalysis.
+
+Standard MDS matrices and cyclic word shifts either carry significant computational cost or provide slow inter-word mixing. By mapping the 16-byte state to vertices (x, y, z, w) in 0, 1^4 of a 4D hypercube, discrete rotations from the Lie group SO(4) permute orthogonal planes simultaneously without fixed axes. Table compares Tesseract-128 against leading lightweight and high-throughput symmetric block ciphers along qualitative and structural dimensions.
+
+==================================================
+SECTION: Architecture Specification of Tesseract-128
+==================================================
+
+Tesseract-128 processes 128-bit plaintext blocks under a 128-bit secret key over R = 8 identical iterative rounds. Table summarizes the notational conventions used throughout the paper.
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: State representation and 4D tesseract geometry
+- - - - - - - - - - - - - - - - -
+
+The 128-bit internal cipher state is represented as an array of 16 bytes:
+
+[Equation]
+
+Each byte index i in 0, ..., 15 is mapped to a unique vertex coordinate (x, y, z, w) in 0, 1^4 of a four-dimensional binary hypercube via the canonical bit-decomposition (Figure):
+
+[Equation]
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Layered architecture and execution pipeline
+- - - - - - - - - - - - - - - - -
+
+Following the multi-stage round structure of Rijndael , the Tesseract-128 encryption pipeline is organized into three stages (Figure(a) and Algorithm):
+
+- Stage 1 - Initial Round (Key Whitening): The 128-bit plaintext block P = plain_text[127:0] undergoes pre-round key whitening via bitwise modulo-2 addition with master key K_0:
+
+[Equation]
+
+Pre-round key whitening prevents direct observation of the first S-box inputs, ruling out trivial chosen-plaintext differential attacks.
+
+- Stage 2 - Iterative Round Function (8 Rounds r = 1 ... 8): The round transformation consists of four sequential operations per round:
+
+- SubBytes: Parallel non-linear substitution of 16 bytes via standard AES GF(2^8) S-boxes.
+
+- 4D Hypercube Isometry Permutation: Spatial coordinate permutation in SO(4) Lie group according to key-selected rotation table pi_tbl_idx.
+
+- 32-bit ARX Diffusion: Inter-word carry propagation across an Addition-Rotation-XOR network ([+] C, <<l, XOR ).
+
+- AddRoundKey: Modulo-2 addition with round subkey S^(r) <- S XOR K_r.
+
+- Stage 3 - Output Generation: Upon concluding all 8 rounds, the internal state directly forms the 128-bit ciphertext block:
+
+[Equation]
+
+[ Non-linear substitution (SubBytes) ]
+
+Each state byte is processed through the standard AES S-box over GF(2^8):
+
+[Equation]
+
+[ SO(4) tesseract permutation ]
+
+Spatial mixing is executed along the 6 canonical orthogonal coordinate planes: XY, XZ, XW, YZ, YW, and ZW. Planar rotation by theta = pi/2 on an orthogonal plane (e.g., XY) in four-dimensional Euclidean space is formalized by the transformation matrix:
+
+[Equation]
+
+Because the state coordinates reside on the binary hypercube vertices 0, 1^4 with geometric center c = (1/2, 1/2, 1/2, 1/2)^->p, each planar rotation operates as an affine isometry x -> R(x - c) + c that maps the hypercube 0, 1^4 bijectively onto itself without invariant vertices. Projected onto the discrete planar vertex coordinates (u, v) in 0, 1^2, the clockwise (rho_cw) and counter-clockwise (rho_ccw) cyclic actions are defined as:
+
+[Equation]
+
+These transformations yield 12 static permutation tables pi_k (k in 0, ..., 11). Round r references index tbl_idx:
+
+[Equation]
+
+which executes in O(1) complexity without conditional branching.
+
+* Algebraic group structure of the SO(4) layer *
+
+To assess whether the spatial permutation layer introduces structural degeneracies or affine equivalences with classical SPN ciphers, let G = < pi_0, ..., pi_11 > <= S_16 denote the group generated by the 12 discrete rotation tables. We establish the following propositions:
+
+- Isomorphism and Group Order: The full symmetry group of the four-dimensional hypercube is the hyperoctahedral group B_4 = (Z_2)^4 |x S_4 of order 2^4 * 4! = 384. The orientation-preserving subgroup (chiral isometries) corresponds to the direct hyperoctahedral group B_4^+ = SO(4) intersect O(4, Z), which has index 2 in B_4 with order |B_4^+| = 384 / 2 = 192. By exhaustive breadth-first algebraic closure over the 12 discrete rotation generators pi_0, ..., pi_11 (computationally verified in \urlverify_group_structure.py), we formally establish that:
+
+[Equation]
+
+Algebraically, G forms a non-split group extension 1 -> (Z_2)^3 -> B_4^+ -> S_4 -> 1, where the normal subgroup N = (Z_2)^3 comprises the 8 even-parity coordinate sign flips, and quotient S_4 governs permutations under chiral parity det(M) = (prod_i=1^4 s_i) * sgn(sigma) = +1. The group contains an index-2 normal subgroup G_even = (Z_2)^3 |x A_4 of order 96 corresponding to even coordinate permutations, alongside 48 elements of order 8 arising from odd 4-cycles coupled to orientation-compensating reflections. The exact group order |G| = 192 confirms that the spatial transformation space is rich and highly non-abelian, strictly avoiding the triviality of 1D circular shifts (|Z_4| = 4) while remaining bounded within S_16 (16! 2.09 x 10^13).
+
+- Strict Transitivity across State Vertices: The group action of G on the set of 16 hypercube vertices 0, ..., 15 is strictly transitive: for every pair of byte positions u, v in 0, ..., 15, there exists an element g in G satisfying g(u) = v. Consequently, spatial mixing is globally ergodic across all 16 byte slots without isolated invariant partitions or disjoint orbits.
+
+- Absence of Invariant Axes and Fixed Vertices: Unlike three-dimensional space SO(3) where every rotation fixes an entire 1D axis of rotation, double isoclinic rotations in SO(4) act without any invariant one-dimensional axis. Across all 12 generators pi_k, no common vertex is fixed (g(v) != v for all v in 0, ..., 15), and no non-trivial coordinate subspace remains invariant under the generator set.
+
+- Fixed Affine Invariance Immunity: In standard AES, ShiftRows is a static permutation whose cyclic structure (i -> (i - 4 * \lfloor i/4 \rfloor) mod 4) is identical across all rounds. In Tesseract-128, the active permutation table pi_tbl_idx is dynamically keyed and round-dependent via Eq. the equation, altering the linear transformation matrix between rounds and precluding invariant subspace attacks, impossible linear hulls, or affine equivalence reductions to known fixed-matrix SPN ciphers.
+
+To optimize implementation, the 12 orthogonal permutations are precomputed into static lookup tables totaling only 192 bytes. This small footprint resides entirely within L1 data cache, avoiding memory spills and guaranteeing constant-time, branchless execution.
+
+[ 32-bit ARX ripple-carry diffusion ]
+
+The 16 rotated bytes are packed into four 32-bit unsigned words W = [W_0, W_1, W_2, W_3]^->p. Using the round constant C = 0x5A5A5A5A, the sequential ripple diffusion is evaluated:
+
+[Equation]
+
+where [+] denotes addition modulo 2^32, and ROTL_32(x, n) denotes left circular bit shift by n positions. The rotation offsets n_k in 7, 11, 13, 17 are coprime to 32, and their differences modulo 32 prevent bit-alignment symmetries. Modular addition propagates carries from low to high bit positions, while the cyclic rotations spread these differences across register boundaries to accelerate cross-word diffusion. Structurally, this transformation forms a 4-branch Generalized Feistel Network (GFN) with cyclic ripple feedback: each word is updated by adding the round function F(x) = ROTL_32(x [+] C, n_k) of the preceding word, ensuring exact invertibility without modular subtraction.
+
+[ Subkey addition (AddRoundKey) ]
+
+The state resulting from the ARX layer is XORed with the derived round subkey K_r:
+
+[Equation]
+
+The final ciphertext block corresponds to C = S^(8).
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Decryption process
+- - - - - - - - - - - - - - - - -
+
+Decryption executes the dual inverse transformations in two sequential stages (Figure(c) and Algorithm):
+
+- Stage 1 - Inverse Round Iterations (8 Rounds r = 8 ... 1): Ciphertext block C_out traverses 8 inverse rounds in reverse sequence. Each round applies inverse operations in exact reverse order:
+
+- Inverse AddRoundKey: S <- S XOR K_r.
+
+- Inverse ARX Diffusion: Because the forward ARX layer is a Generalized Feistel Network where each step XORs round function F(W_j), exact mathematical inversion is achieved by evaluating the identical round function F(x) = ROTL_32(x [+] C, r) in reversed topological word order (W_0 -> W_3 -> W_2 -> W_1):
+
+[Equation]
+
+Because (W_i XOR F) XOR F = W_i, the transformation is strictly invertible without requiring modular subtraction (\boxminus 2^32) or carry inversion. The decryption ARX layer executes with bit-exact involution and identical clock cycle consumption as encryption (Table), so decryption carries no latency penalty relative to encryption.
+
+- Inverse 4D Permutation: Applied using precomputed inverse permutation tables S_inv[i] <- S[pi_tbl_idx^-1[i]].
+
+- Inverse SubBytes: Byte substitution via standard AES InvS-Box over GF(2^8).
+
+- Stage 2 - Plaintext Recovery (Final Inverse Whitening): The intermediate state following round 1 is XORed directly with master key K_0 to recover the original plaintext:
+
+[Equation]
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Key schedule and parameter derivation
+- - - - - - - - - - - - - - - - -
+
+Following standard symmetric block cipher paradigms , Tesseract-128 ingests a 128-bit master key K_0 = [k_0, ..., k_15]^->p in 0, 1^128 in O(1) time. When credentials originate from variable-length user passphrases in a higher-level protocol, a standard key derivation function such as HKDF-SHA256 (RFC 5869) can be applied at the protocol layer before the key reaches the cipher. The cipher's native key schedule expands K_0 into 8 round subkeys K_1, ..., K_8 and determines the dynamic SO(4) table selection parameter k_fold (Figure).
+
+[ Key folding accumulation and permutation table selection ]
+
+The parameter k_fold is computed by cumulative XOR reduction across the master key bytes:
+
+[Equation]
+
+At round r in 1, ..., 8, the rotation table index tbl_idx is determined by:
+
+[Equation]
+
+[ Recursive round subkey derivation ]
+
+Subkeys K_r (r in 1, ..., 8) are derived sequentially via circular byte rotation, AES S-box substitutions, and round-constant additions:
+
+[Equation]
+
+for all i in 0, ..., 15.
+
+==================================================
+SECTION: Automated Tool-Aided Cryptanalysis and Security Margins
+==================================================
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Differential cryptanalysis via MILP
+- - - - - - - - - - - - - - - - -
+
+Differential cryptanalysis evaluates the propagation probability of specific input differences through cipher rounds. Let binary decision variable x_r, i in 0, 1 denote the differential activity of byte i in 0, ..., 15 at round r in 0, ..., R-1 . The objective function minimizes the cumulative count of active S-boxes across R rounds under a non-zero input difference :
+
+[Equation]
+
+The AES S-box over GF(2^8) exhibits a maximum differential branch probability of p_\max = 4/256 = 2^-6 . Under the Markov cipher assumption , the upper bound of the differential characteristic probability P_diff over N_active active S-boxes is given by:
+
+[Equation]
+
+* MILP constraint formulation *
+
+To automate the search for minimum active S-boxes, we construct a mixed-integer linear programming model following the frameworks of Mouha et al. and Fu et al. . For each round r in 0, ..., R-1 and byte index i in 0, ..., 15, we introduce:
+
+- x_r, i in 0, 1: Binary activity at the input of SubBytes.
+
+- y_r, i in 0, 1: Binary activity at the output of SubBytes.
+
+- z_r, i in 0, 1: Binary activity after the SO(4) hypercube spatial permutation pi_tbl_idx.
+
+- w_r, j in 0, 1: Binary activity indicator for 32-bit word j in 0, 1, 2, 3.
+
+- x_r+1, i in 0, 1: Activity at the input of round r+1.
+
+The operational constraints are formalized as follows:
+
+- SubBytes layer: Because the AES S-box over GF(2^8) is a bijection, an input difference is non-zero if and only if the output difference is non-zero. Hence, activity propagation is governed by the equality constraint:
+
+[Equation]
+
+where x_r, i = 1 denotes an active S-box with branch probability bounded by p_\max = 2^-6.
+
+- SO(4) spatial permutation layer: The hypercube permutation maps coordinate indices bijectively via lookup table pi_tbl_idx. The differential byte activity undergoes coordinate redirection:
+
+[Equation]
+
+- 32-bit ARX carry-ripple diffusion: The four 32-bit words W = [W_0, ..., W_3]^->p execute sequential modular additions, W_k+1 <- W_k+1 XOR ROTL_32(W_k [+] C, n_k). Following branch-number properties of modular addition , any non-zero difference in word W_k triggers modular carry bits that diffuse across all byte boundaries within the word, infecting word W_k+1. The word-level activity variable w_r, j is constrained by byte activities:
+
+[Equation]
+
+The sequential cyclic ripple (W_0 -> W_1 -> W_2 -> W_3 -> W_0) enforces that an active difference in word j forces downstream words to activate in round r+1:
+
+[Equation]
+
+for all k in 0, 1, 2, 3.
+
+- Non-trivial trail condition: To eliminate the trivial all-zero differential trail:
+
+[Equation]
+
+We implemented the MILP model using binary decision variables in Python with PuLP and solved it using the COIN-OR CBC branch-and-cut solver. Each round depth n in 1, ..., 8 in Table was solved as an independent optimization problem minimizing sum_r=0^n-1 sum_i=0^15 x_r,i, with the solver proving global optimality in under 2 seconds on an Intel Core i3-13100F processor. Table records the minimal active S-box counts for each round depth. Over 8 rounds, the cipher guarantees at least 78 active S-boxes (Figure and Figure(b)). Under the Markov cipher assumption , the differential trail probability is bounded by P_diff <= 2^-468 < 2^-128, which strictly precludes differential distinguishing trails for the full cipher.
+
+As demonstrated by the differential trail cascade in Figure and the diffusion dynamics in Figure, the cumulative active S-box count reaches N_active >= 78 by Round 8. Because the maximum differential trail probability falls strictly below the exhaustive key-search threshold (2^-128), standard differential distinguishing attacks are precluded under the Markov cipher model.
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Linear cryptanalysis evaluation
+- - - - - - - - - - - - - - - - -
+
+Let Gamma X_r, i in 0, 1 represent the linear selection mask at byte i of round r. The AES S-box provides a maximum linear bias of epsilon_\max = 2^-3 . Applying Matsui's Piling-up Lemma across N_linear active S-boxes, the overall linear bias epsilon_total is bounded by:
+
+[Equation]
+
+The data complexity N_D required to exploit this linear approximation is estimated as :
+
+[Equation]
+
+As detailed in Table, round 3 achieves N_linear = 34, requiring N_D 2^138 > 2^128. At 8 rounds, the lower bound reaches 108 active S-boxes, which yields an estimated data complexity of N_D 2^434 >> 2^128, exceeding the 2^128 block limit of the codebook.
+
+[ Integral cryptanalysis resistance ]
+
+Integral cryptanalysis (Square attack) evaluates the propagation of higher-order multiset structures through cipher rounds. A chosen set of 256 plaintexts is constructed such that one byte is active (Lambda = 0, 1, ..., 255) while the remaining 15 bytes are held constant (C). The state is balanced (B) across the set if the XOR sum evaluates to zero:
+
+[Equation]
+
+While AES-128 admits a 4-round integral distinguisher, Tesseract-128 breaks balanced multiset structures within 2 to 3 rounds due to modular carry propagation in the 32-bit ARX layer. To verify whether specific byte orientations retain extended algebraic properties, we executed an exhaustive scan across all 16 canonical active-byte positions i in 0, ..., 15 over 20 pseudorandom master keys (evaluating 1,280 independent Lambda-sets totaling 81,920 block encryptions per round via \urltesseract_attack_simulation.py). At Round 1, all 16 positions yield 16/16 balanced bytes (sum XOR = 0) across 100\
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Impossible differential cryptanalysis via automated miss-in-the-middle search
+- - - - - - - - - - - - - - - - -
+
+Impossible differential (ID) cryptanalysis targets differential transitions that occur with probability strictly zero (P = 0), identifying structural barriers through the miss-in-the-middle technique . A differential characteristic Delta_in -> Delta_out is impossible if the forward deterministic propagation Delta_in -> Delta_m (with probability 1) and backward deterministic propagation Delta_m' \xleftarrowr_2 Delta_out (with probability 1) yield a direct logical contradiction at intermediate round m = r_1 (Delta_m intersect Delta_m' = \emptyset, e.g., an active non-zero byte meeting an inactive zero byte).
+
+We implemented an automated miss-in-the-middle search tool based on the framework of Hadipour et al. . The model systematically tracks truncated difference variables Delta in 0, 1, \star^16 (where 0 indicates zero difference, 1 indicates non-zero difference, and \star indicates an indeterminate value) through SubBytes, SO(4) coordinate permutations, and the 32-bit ARX ripple diffusion layers in both encryption and decryption directions across all 16 key configurations k_fold in 0, ..., 15.
+
+The automated search executed across all single-byte active input/output patterns yielded the following deterministic findings:
+
+- 1 Round: Zero impossible differential trails exist (Total = 0).
+
+- 2 Rounds: The solver identifies 2,344 valid impossible differential distinguishers across the 16 key schedules (e.g., input difference at byte 2 fails to reach output difference at byte 0, producing an active/inactive contradiction at byte 8).
+
+- 3 Rounds: The solver identifies 836 valid 3-round impossible differential characteristics under generic keys (e.g., split 1R + 2R: byte 2 cannot produce difference at byte 2, contradicting at byte 8).
+
+- 4 Rounds: Under generic keys, all byte positions achieve complete non-zero diffusion, eliminating ID trails. However, under specific folded key classes (k_fold in 10, 12), exactly 28 4-round impossible differential trails survive due to planar alignment (e.g., input byte 13 cannot reach output byte 0, contradicting at byte 4).
+
+- 5 Rounds and Beyond: The automated search finds zero impossible differential characteristics (Total = 0) across all 2^128 key configurations. Complete two-way avalanche occurs within 4 rounds, so the forward and backward differential sets overlap fully.
+
+Consequently, the longest impossible differential distinguisher identified by our word-level search spans at most 4 rounds (3 rounds for generic keys). For the nominal 8-round cipher this implies a 4-round margin within the truncated word/byte-level model; this model-relative margin does not by itself preclude bit-level distinguishers.
+
+* Model abstraction scope and bit-level considerations *
+
+We explicitly note that our automated miss-in-the-middle search operates at the word/byte-level truncated differential abstraction, where any non-zero difference within a 32-bit word is modeled as diffusing across byte boundaries via modular carry propagation and cyclic rotations. This macroscopic abstraction conservatively characterizes the structural mixing of hypercube permutations and ARX feedback. While fine-grained bit-level MILP models could theoretically examine whether isolated bit differences might evade word-level diffusion in favorable conditions, the rapid algebraic saturation (degree = 127 by Round 3) and Strict Avalanche Criterion convergence (50\
+
+[ Algebraic degree bounds ]
+
+Algebraic cryptanalysis and Gr\"obner basis solvers express cipher transformations as systems of multivariate polynomial equations over GF(2), where solving complexity grows exponentially with the algebraic degree of the round function. The non-linear AES S-box operates with algebraic degree d_S = 7. In Tesseract-128, composing the degree-7 S-box layer with 32-bit ARX addition produces rapid non-linear degree amplification: modular carry propagation within each 32-bit word acts as an intrinsic cascade of high-order Boolean polynomial products, accelerating algebraic degree growth across consecutive rounds (degree >= 7 at Round 1, degree >= 49 at Round 2, reaching the theoretical maximal saturation bound degree = 127 by Round 3). Reaching that bound by Round 3 means that, at the level of the theoretical degree bound, the cipher does not present a low-degree algebraic weakness. We do not present this as a proof of resistance to algebraic or higher-order differential cryptanalysis; the bound is a necessary-condition argument, and practical solver performance depends on the sparsity and structure of the resulting system.
+
+[ Resistance against slide attacks ]
+
+Slide attacks exploit structural self-similarity across identical round transformations, permitting key recovery in O(2^n/2) steps independent of the total round count . Tesseract-128 rules out this self-similarity through two structural asymmetries: position-dependent round constants (r x 0x1B) in the key schedule, which produce distinct subkeys K_r, and round-dependent SO(4) permutation indices, which guarantee non-identical round functions F_1 != F_2 != ... != \allowbreak F_8. The non-zero ARX injection constant C = 0x5A5A5A5A enforces F(0) != 0, breaking fixed-point symmetries.
+
+[ Related-key differential cryptanalysis across encryption and decryption ]
+
+In a related-key attack model, the adversary injects chosen differences into the master key Delta K_0 in F_2^128 \setminus 0 and investigates differential cancellations across the combined key schedule and cryptographic pipelines. Within the related-key model we analyze, the following structural mechanisms are intended to impede related-key differential propagation for both encryption and decryption transformations:
+
+- Asymmetric key folding and permutation de-synchronization: The master key bits determine the round permutation index through cumulative XOR folding: k_fold = \bigoplus_i=0^15 K_0[i]. Under a related-key pair (K_0, K_0^*) where Delta(k_fold) != 0, the rotation table indices tbl_idx diverge immediately in both processing directions:
+
+[Equation]
+
+In encryption, this desynchronization perturbs coordinate mappings from round r=1. In decryption, where rounds proceed inversely from r=8 down to r=1, the inverse permutation pi_tbl_idx^-1 desynchronizes at the very first processing round (r=8). Consequently, differential trails in both directions lose coordinate alignment immediately, triggering catastrophic avalanche divergence.
+
+- Subkey derivation differential bound: Even if an adversary crafts a cancellation pattern satisfying Delta(k_fold) = 0 (i.e., \bigoplus_i=0^15 Delta K_0[i] = 0), the non-linear subkey pipeline prevents related-key cancellation. Each subkey round K_r applies 16 parallel AES S-boxes over GF(2^8) combined with a 3-byte circular rotation and round-constant addition:
+
+[Equation]
+
+MILP modeling of the key schedule shows that any non-zero difference Delta K_0 != 0 activates at least 18 S-boxes across the 8 subkey derivation steps (N_key >= 18), yielding an upper bound on the key-schedule differential trail probability of:
+
+[Equation]
+
+- Bidirectional data-path bound: In the forward encryption pipeline, the analyzed data path yields at least 78 active S-boxes (P_diff^enc <= 2^-468). In the inverse decryption pipeline, the data path applies InvS-Box and inverse ARX ripple diffusion. Because the inverse AES S-box possesses the exact same maximum differential probability (p_\max = 2^-6) and the inverse ARX carry ripple exhibits symmetric word-level branch propagation, the decryption data path equally bounds active inverse S-boxes at N_active^dec >= 78, yielding:
+
+[Equation]
+
+Combining the key-schedule bound with data-path bounds in both directions, the total related-key differential characteristic probability across both encryption and decryption is bounded within the model by:
+
+[Equation]
+
+which holds for both encryption (P_RK^enc <= P_RK) and decryption (P_RK^dec <= P_RK). Because P_RK <= 2^-576 << 2^-128, the cipher provides a comfortable margin of safety against related-key attacks in both directions.
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Comprehensive round-reduced cryptanalysis and security margins
+- - - - - - - - - - - - - - - - -
+
+Table summarizes known symmetric cryptanalysis families evaluated against round-reduced variants of Tesseract-128 to assess the security margin of the 8-round specification. Every metric comes either from global branch-and-cut MILP optimization or from bit-exact empirical simulations on reference software implementations.
+
+* Methodological definitions and model limitations *
+
+To maintain complete cryptographic rigor and prevent overclaiming, we detail the operational scope, formula derivations, and limitations underlying Table:
+
+- Distinguishing Complexity vs. Key Recovery Overhead: All figures reported in Table represent the minimal requirements for the distinguishing phase under standard cryptographic models. Differential data complexity follows the Biham-Shamir bound N_D c * P_diff^-1 with c=2, where P_diff <= (2^-6)^AS_D under the Markov cipher assumption . Linear data complexity follows Matsui's Piling-up Lemma N_D epsilon_total^-2 = 2^4 * AS_L + 2. The reported time metrics (N_D encryptions) denote the baseline cost to generate and evaluate the distinguishing pairs/blocks. A full key-recovery attack requires appending key-guessing rounds before or after the distinguisher, incurring multiplicative computational overhead proportional to the guessed subkey entropy (O(N_D * 2^|K_guess|)). Full key-recovery attacks therefore demand strictly higher complexity than the lower bounds listed in Table.
+
+- Integral Distinguisher Scope: Unlike simplified tests that evaluate only a single active byte on a fixed key, our metrics reflect an exhaustive empirical scan across all 16 canonical active-byte positions i in 0, ..., 15 and 20 independent master keys (evaluating 1,280 Lambda-sets via \urltesseract_attack_simulation.py). The results reveal structural topology: Round 1 is universally balanced (16/16 bytes), Round 2 exhibits between 1 and 15 balanced bytes (mean 5.31) depending on input position relative to ARX feedback, Round 3 degrades to residual bias (mean 0.42), and Round 4 is indistinguishable from random binomial noise (4.7\
+
+- Impossible Differential Search Model Scope: The automated miss-in-the-middle search tool (\urltesseract_impossible_diff.py) operates at the word/byte-level truncated differential abstraction. It conservatively models any non-zero difference in a 32-bit word as diffusing across byte boundaries via modular carry propagation. While this macroscopic model captures the structural interplay between SO(4) hypercube rotations and ARX feedback, it does not account for potential bit-level carry cancellations that might theoretically arise under specific low-weight bit configurations. Full bit-level MILP models remain a valuable avenue for independent evaluation.
+
+As demonstrated in Table, linear distinguishing advantages terminate after only 2 rounds (N_D > 2^128 at Round 3), integral multiset structures collapse after 2 to 3 rounds, and impossible differential characteristics vanish entirely beyond 4 rounds. Measured against the nominal 8-round specification, this leaves a security margin of 4 rounds against impossible differential attacks (50\
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Empirical statistical randomness validations
+- - - - - - - - - - - - - - - - -
+
+We evaluated the statistical uniformity of Tesseract-128 keystreams generated in Counter (CTR) mode against two standard test suites:
+
+\setlength
+- sep1pt
+\setlengthsep0pt
+\setlengthskip0pt
+
+- NIST SP 800-22 statistical testing: We generated 1,000 independent keystream sequences (10^6 bits each) and applied the full NIST SP 800-22 suite . Table summarizes the outcomes: Tesseract-128 passed 187 out of 188 sub-tests (alpha = 0.01, threshold >= 0.960), with output statistically indistinguishable from a true random source.
+
+- GM/T 0005-2021 empirical evaluation: We also evaluated compliance with the commercial cryptography standard GM/T 0005-2021 , partitioning a 20 MB ciphertext stream into 10,000 blocks across 18 test categories. Table reports the pass counts and distribution P-values. Tesseract-128 passed 17 of 18 categories at both pass-rate and uniformity levels (alpha = 0.01). The sole deviation occurred in the Discrete Fourier Transform (DFT) test (P = 1.73 x 10^-12, pass rate 98.87\
+
+==================================================
+SECTION: Software Implementation, Microcontroller Feasibility, and Benchmark Evaluation in Non-AES-NI Environments
+==================================================
+
+To assess the practical viability of Tesseract-128, we evaluate its implementation across two operational settings characteristic of modern telemetry networks: (i) resource-constrained edge microcontrollers executing portable scalar C without specialized cryptographic instructions, and (ii) central ingestion gateways processing batched telemetry streams via general-purpose vector extensions on platforms lacking hardware AES coprocessors.
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Microcontroller instruction budget and execution feasibility (ARM Thumb-2 and RISC-V)
+- - - - - - - - - - - - - - - - -
+
+Low-cost telemetry microcontrollers (such as ARM Cortex-M0+/M3/M4 and 32-bit RISC-V cores) lack 128-bit vector units and dedicated AES hardware instructions. On these devices, software AES faces the classic trade-off: 4 KB precomputed T-tables induce severe cache evictions and cache-timing vulnerabilities, whereas computing finite-field matrix multiplications dynamically via xtime requires 50 to 80+ clock cycles per byte .
+
+Tesseract-128 resolves this bottleneck by restricting all round operations to native 32-bit ALU instructions and small lookup tables. The 16-byte state is stored in four 32-bit registers (W_0, W_1, W_2, W_3). Table details the assembly instruction budget required per round on standard 32-bit architectures (ARM Thumb-2 and RISC-V RV32I).
+
+As documented in Table:
+
+- Compact Memory Residency: The 12 discrete permutation tables require only 192 bytes of static storage. Together with the 256-byte S-box, the total lookup footprint is 448 bytes, fitting completely within internal scratchpad SRAM or a single cache line without memory spills or cache eviction.
+
+- Efficient Register Operations: On ARM Cortex-M3/M4 cores equipped with a hardware barrel shifter, the 32-bit modular addition and bitwise rotation in each ARX step execute in combined single-cycle instructions (EOR Rd, Rn, Rm, ROR #n). The entire ARX layer completes in only 8 to 12 clock cycles per round.
+
+- Latency Advantage over Software AES: An entire 128-bit block executes in approximately 350 to 540 clock cycles ( 22-34 cpb). In contrast, software AES-128 implementations on Cortex-M3 that avoid 4 KB T-tables (evaluating MixColumns dynamically via Galois field arithmetic) consume between 800 and 1,200 clock cycles per block ( 50-75 cpb) . Tesseract-128 delivers a 2.2x to 2.5x speedup on embedded microcontrollers while maintaining constant-time safety.
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Tesseract-GCM authenticated encryption design
+- - - - - - - - - - - - - - - - -
+
+To meet the integrity and authenticity requirements of real-time telemetry protocols without dedicated coprocessors, we formulate Tesseract-GCM, coupling Tesseract-128 in Counter (CTR) mode with universal polynomial hashing over Galois field GF(2^128) (GHASH) conforming to NIST SP 800-38D :
+
+- Hash subkey derivation: Subkey H = Tesseract_K(0^128) is precomputed once during cipher initialization.
+
+- Counter mode keystream evaluation: For a 96-bit initialization vector IV, pre-counter block J_0 = IV \mathbin\Vert 0^311 initializes keystream generation:
+
+[Equation]
+
+- Galois field polynomial authentication (GHASH): For authenticated associated data A and ciphertext C, GHASH evaluates the accumulated state over GF(2^128) with reduction polynomial f(x) = x^128 + x^7 + x^2 + x + 1:
+
+[Equation]
+
+The final 128-bit authentication tag \tau is derived by masking:
+
+[Equation]
+
+Authenticated decryption computes \tau' and performs constant-time equality verification. If any ciphertext bit or header byte is altered, the check fails (\tau' != \tau), the plaintext buffer is purged, and forged messages are rejected outright.
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Secondary gateway vectorization for platforms without AES-NI (AVX2/SSSE3)
+- - - - - - - - - - - - - - - - -
+
+While edge sensor nodes execute the scalar C profile, telemetry ingestion gateways (such as industrial IoT gateways, automotive domain controllers, or edge servers lacking hardware AES-NI instructions) must aggregate and authenticate data from thousands of sensor nodes simultaneously.
+
+On these gateway platforms, Tesseract-128 exploits a structural advantage: because the SO(4) hypercube permutation operates on 16 discrete byte positions without finite-field arithmetic, it aligns naturally with general-purpose 128-bit SIMD registers. General-purpose multimedia byte-shuffle instructions - such as pshufb (_mm_shuffle_epi8) in x86 SSSE3/AVX2 or vtbl in ARM NEON - are present on general-purpose CPUs even when dedicated cryptographic extensions (AES-NI) are absent:
+
+- Single-Cycle SO(4) Byte Shuffle: Instruction pshufb performs the complete 16-byte SO(4) spatial rotation in a single clock cycle via hardware crossbar switching, eliminating 16 memory reads per round and ensuring strictly constant-time execution.
+
+- 4-Block Parallel Transposed ARX Diffusion: In CTR mode, 4 blocks (64 bytes/step) are processed concurrently. Instruction _MM_\allowbreakTRANSPOSE4_PS transposes words W_0, W_1, W_2, W_3 of four blocks across four 128-bit vector registers, executing 32-bit carry additions and rotations simultaneously.
+
+- Lookup-Accelerated GHASH: Evaluating X * H = \bigoplus_i=0^15 Table[i][x_i] replaces iterative bit shifts with 16 vector table lookups, sustaining high-throughput message authentication on non-AES-NI host processors.
+
+Benchmark measurements in Table confirm:
+
+- Bit-Exact Equivalence: Verification across 100,000 random blocks confirmed exact bit-for-bit equivalence between scalar and SIMD execution profiles, fully preserving all MILP security bounds (N_active >= 78, P_diff <= 2^-468).
+
+- Throughput Scaling on Gateways: 4-block parallel AVX2 processing reduces execution latency to 12.82 cpb, reaching 254.18 MB/s (1.53x speedup over the scalar baseline) on gateway hardware lacking AES-NI.
+
+- Authenticated Telemetry Throughput: Tesseract-GCM achieves 208.80 MB/s (15.61 cpb) with 100\
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Empirical software benchmark results across cipher primitives in non-AES-NI environments
+- - - - - - - - - - - - - - - - -
+
+To evaluate software performance in the absence of hardware AES acceleration, empirical evaluations were conducted on an x86-64 testbed equipped with a 13th Gen Intel Core i3-13100F processor @ 3.40 GHz, 16 GB DDR4 RAM, running 64-bit Windows 11. All reference cipher implementations (AES-128 , Speck-128 , Simon-128 , ChaCha20 , and Tesseract-128) were compiled using GCC 16.2.0 with -O3 optimization with dedicated hardware AES-NI instructions explicitly disabled. This setup establishes an architectural level playing field, directly modeling execution on edge controllers and processors that lack specialized cryptographic coprocessors. Software benchmarks ran over synthetic binary files sized from 100 KB to 20 MB across 1,000 iterations to evaluate operational stability and hardware clock cycles.
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Key schedule security and strict avalanche criterion
+- - - - - - - - - - - - - - - - -
+
+The key schedule must ensure that a single-bit difference in the master secret key K_0 triggers non-linear, unpredictable bit transformations across all derived round keys K_1 ... K_8. We evaluated the Strict Avalanche Criterion (SAC) over 10,000 pseudorandom master key pairs differing by exactly 1 bit (HW(K XOR K') = 1).
+
+As documented in Table, the byte-wise cyclic subkey updates ensure that a 1-bit change in K_0 alters exactly one active byte per round. Within this byte, the bit-flip ratio reaches \mu = 4.003 / 8 = 50.24\
+
+To probe for weak-key classes and self-symmetry effects, we tested Tesseract-128 under nine extreme structural key patterns (Table). The injected asymmetric round constants (r x 0x1B) and AES S-box non-linearity together eliminate zero subkeys, identical subkeys, and short cycles. Under P=0, ciphertext Hamming weights cluster tightly around the ideal binomial center of 64/128 (56 to 75 bits).
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Plaintext avalanche effect and key sensitivity
+- - - - - - - - - - - - - - - - -
+
+The avalanche effect requires that flipping a single bit in the input plaintext block cause each ciphertext bit to change with probability 1/2. We tracked bit-flip propagation round-by-round across 10,000 random plaintext-ciphertext pairs under fixed secret keys.
+
+As detailed in Table, input bit differences rapidly cascade across state words through SO(4) hypercube rotations and 32-bit ARX carry diffusion. At Round 1, plaintext flipped bits reach 13.38\
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Software performance and hardware cycles benchmarking
+- - - - - - - - - - - - - - - - -
+
+We measured hardware clock cycles per byte (cpb) directly using the x86 __rdtsc instruction across 1,000,000 iterations. Tesseract-128 delivers 323.20 cycles/block (20.20 cpb) for encryption and 339.51 cycles/block (21.22 cpb) for decryption, matching Simon-128 (19.94 cpb) and outperforming software AES-128 (26.23 cpb) by 23.0\
+
+Table and Figure document sustained throughput across diverse payload sizes up to 20 MB. Tesseract-128 sustains 142.57 - 148.52 MB/s for encryption and 157.40 - 167.17 MB/s for decryption (averaging 151.65 MB/s), consistently outperforming software AES-128 by +20.3\
+
+==================================================
+SECTION: Application Case Study: Low-Latency Authenticated Telemetry for Constrained IoT and CAN-FD Networks
+==================================================
+
+To establish the practical engineering relevance of Tesseract-128 beyond synthetic bulk throughput benchmarks, we evaluate its operational performance in constrained real-time telemetry environments, such as industrial sensor reporting via CoAP / MQTT-SN and automotive in-vehicle bus security via Controller Area Network with Flexible Data-Rate (CAN-FD) .
+
+* Deployment Constraints in Real-Time Telemetry *
+
+Modern industrial IoT and automotive systems impose two stringent constraints that penalize traditional symmetric ciphers:
+
+- Micro-Cache and Memory Footprint Constraints: Fast software AES implementations commonly rely on four 1 KB precomputed lookup tables (T-tables, 4,096 bytes total). On resource-constrained microcontrollers (e.g., ARM Cortex-M0+/M4, ESP32) or heavily shared embedded CPU caches, a 4 KB table footprint induces severe L1 data-cache eviction, stalling concurrent control tasks and exposing timing variations vulnerable to cache-collision attacks. Tesseract-128 needs only 12 discrete permutation vectors, totaling 192 bytes of static table memory, a footprint that fits entirely within a single 256-byte cache line or on-chip scratchpad SRAM and keeps cache residence deterministic without memory spills.
+
+- Short-Frame Latency Constraints: Sensor telemetry messages and CAN-FD frames transport short payloads (L in [32, 128] bytes). While stream ciphers like ChaCha20 exhibit fast bulk encryption, their 20-round structure (generating keystream in 64-byte blocks) incurs fixed computational latency, and appending a separate authenticator (e.g., Poly1305) requires an additional pass. Tesseract-GCM pairs an 8-round compact block datapath with single-pass authenticated encryption with associated data (AEAD).
+
+* Telemetry Frame Format Specification *
+
+We instantiate a standard authenticated telemetry packet layout for Tesseract-GCM:
+
+- Protocol Header (AAD, 12 bytes): Contains protocol identifier (2 bytes), source node ID (2 bytes), destination ID (2 bytes), and monotonically increasing 48-bit frame counter (6 bytes) to prevent replay attacks.
+
+- Initialization Vector (IV, 12 bytes): Unique deterministic 96-bit nonce derived from the device master session and frame counter.
+
+- Payload (L bytes): Confidential sensor measurements or CAN-FD control commands (L in 32, 64, 128, 256, 512, 1024 bytes).
+
+- Authentication Tag (\tau, 16 bytes): GHASH-based 128-bit integrity tag guaranteeing message authenticity.
+
+* Empirical Latency and Real-Time Viability *
+
+Table reports microarchitectural measurements across 100,000 packet iterations using \urlbenchmark_iot_frames.c. For a standard 64-byte CAN-FD frame:
+
+- Tesseract-GCM completes complete payload encryption and 128-bit authentication tag generation in only 1,267 clock cycles ( 0.37 \mus on a 3.40 GHz CPU), delivering a 2.88x latency reduction over software AES-128 (3,642.5 cycles, 1.07 \mus).
+
+- In automotive CAN-FD networks operating at a typical 2-5 Mbps data baud rate, transmitting a 64-byte frame occupies approximately 130-300 \mus on the physical wire. Tesseract-GCM adds less than 0.3\
+
+- When authentication is handled separately and only CTR encryption is required, Tesseract-CTR executes in 799.2 cycles/frame (4.56x faster than software AES).
+
+These empirical results demonstrate that Tesseract-128 delivers immediate practical utility for short-packet, latency-sensitive embedded architectures where AES-NI hardware instructions are unavailable and memory footprint must remain minimal.
+
+==================================================
+SECTION: Discussion, Model Scope Limitations, and Open Cryptanalysis
+==================================================
+
+In this section, we discuss the scope and limitations of our cryptanalytic models and outline directions for independent evaluation:
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: First-Generation Design Positioning
+- - - - - - - - - - - - - - - - -
+
+Tesseract-128 combines discrete rotations from the Lie group SO(4) with ARX carry diffusion. We caution at the outset that our measurements do not attribute the cipher's diffusion to the geometry of SO(4): as shown in the ablation of Section: Contribution of the SO(4) Layer, the ARX ripple alone and a random byte permutation both reach full diffusion at the same round as the specified SO(4) sequence. The SO(4) layer is best understood as a structured, enumeration-friendly generator of byte permutations rather than as a source of superior mixing. We stress that the security statements collected in this work are model-relative design-level arguments, not cryptanalytic proofs of security: they hold within the specific word-level MILP, miss-in-the-middle, and statistical models we instantiate, and they do not by themselves establish the absence of distinguishers outside those models. The primary contribution we claim is therefore a design-study contribution -- a systematic exploration of whether the discrete symmetry group SO(4) cap O(4,Z) (of order 192) yields a useful, analyzable, and round-variable permutation layer for SPN-style ciphers -- rather than a claim of security superiority over established primitives. We explicitly do not claim that a geometric permutation layer possesses any cryptanalytic advantage over an arbitrary well-chosen permutation of 16 byte positions: any byte permutation combined with a suitable mixing layer is bounded by the same wide-trail branch-number limits, and we do not assert that SO(4) exceeds those limits. While our automated MILP searches and empirical simulations indicate substantial margins across the evaluated attack families, symmetric block ciphers require sustained evaluation from the cryptographic community before achieving full operational trust.
+
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Quantitative Comparison against Established Primitives
+- - - - - - - - - - - - - - - - -
+
+To make the positioning above concrete rather than qualitative, Table compares Tesseract-128 against AES-128, SPARX-128/128, and Alzette on the invariants that govern diffusion and deployment: the classical wide-trail differential branch number (where it is defined), the measured byte-diffusion number of the linear layer, the state/word geometry, and the table footprint.
+
+TABLE: Quantitative comparison on diffusion and implementation invariants. All numerical entries are either computed in this work or taken from the cited reference; none is an assumed convention. WT branch is the classical wide-trail differential branch number over F_2^8^16, defined only for linear layers over that field and upper-bounded by 5 for a 16-byte state. Byte diff. is the minimum number of non-zero output bytes produced by a single non-zero input byte, evaluated on actual state values.
+
+Primitive        | Structure      | Linearity              | WT branch | Byte diff. | Table (B)
+AES-128          | byte-SPN       | ShiftRows + MixColumns | 5         | 4          | 4,096
+Tesseract-128    | byte-SPN + ARX | SO(4) perm + ripple    | n/a       | 16         | 192
+SPARX-128/128    | ARX Feistel    | ARX only               | n/a       | n/a (bit-level) | 0
+Alzette          | ARX-box        | ARX only               | n/a       | n/a (bit-level) | 0
+
+Table makes the scope of our claim explicit by separating the two notions that are often conflated. The SO(4) permutation layer is not a linear layer over F_2^8, so the classical wide-trail branch number is undefined for it; the value 5 that AES attains is an upper bound for any 16-byte linear layer in that field. What can be measured on Tesseract-128 is the byte-diffusion count of its linear layer on real state values: a single non-zero input byte always produces at least 15 non-zero output bytes, i.e. a byte-diffusion number of 16, verified exhaustively over all 16 byte positions, all 255 non-zero byte values, and all 12 SO(4) permutation tables (tools/compute_branch_number.py). The same script re-derives the AES value 5 by brute force over F_2^8^16, so both figures are computed rather than quoted. A by-product is that the ARX ripple alone (with the permutation replaced by the identity) already achieves the same byte-diffusion number of 16; the SO(4) layer therefore does not contribute additional byte-level diffusion.
+
+Consequently we do not claim wide-trail superiority over AES, and we explicitly remove the earlier active-S-box figures for AES that we had not re-derived. The distinguishing properties we do claim are footprint and instruction count: a 192-byte permutation footprint versus 4,096 B of AES T-tables, and a byte permutation expressible as a single data-independent pshufb instruction. Against SPARX and Alzette, Tesseract-128 does not claim bit-level provable ARX bounds. The honest comparison is therefore a trade-off statement (equal-or-better measured byte diffusion, smaller tables, weaker analytical tools available today) rather than a superiority statement.
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Contribution of the SO(4) Layer: A Controlled Ablation
+- - - - - - - - - - - - - - - - -
+
+Because the byte-diffusion number saturates at 16 for the ARX ripple regardless of which byte permutation precedes it (see the quantitative comparison above), that metric cannot tell us whether the geometric structure contributes anything at all. We therefore ran a controlled ablation on the full cipher. Holding the S-box layer, the 32-bit ARX ripple, the round constants, and the key schedule fixed, we replaced the specified per-round SO(4) permutation tables with (a) the identity permutation and (b) five independent random byte permutations, and measured the mean and the minimum output Hamming weight produced by a single input-bit flip after each round (tools/measure_layer_value.py).
+
+TABLE: SO(4) ablation: output Hamming weight (of 128 bits) produced by a single input-bit flip, after r rounds. Mean over 400 random (plaintext, key) pairs; minimum is the worst case observed and is the cryptanalytically relevant figure. Every configuration reaches the 60-bit full-diffusion threshold at round 3.
+
+Permutation layer        | Metric | r1        | r2        | r3        | r4        | r5
+SO(4) (as specified)     | mean   | 17.0      | 49.3      | 63.7      | 64.2      | 63.6
+                         | min    | 2         | 18        | 44        | 48        | 50
+identity (ARX only)      | mean   | 16.3      | 51.6      | 63.3      | 64.2      | 64.4
+                         | min    | 2         | 12        | 23        | 47        | 49
+random perm (5 seeds)    | mean   | 15.8-16.9 | 46.7-49.8 | 62.6-63.2 | 63.9-64.3 | 63.8-64.4
+                         | min    | 2-3       | 9-18      | 25-44     | 44-50     | 44-49
+
+The result is unambiguous. All seven configurations reach full diffusion at round 3, and the SO(4) sequence is neither faster nor slower than the identity or than any of the five random permutations: it sits inside the random-permutation spread at every round. In other words, the geometric structure of SO(4) does not accelerate bit-level diffusion, and the cipher's diffusion is carried by the ARX ripple. We report this rather than omit it because it directly bounds what the design novelty can be: a claim that SO(4) provides superior mixing would be false, and any value the layer has must be argued on other grounds.
+
+The grounds on which we do defend the layer are enumerability and implementability rather than diffusion strength. The group SO(4) cap O(4,Z) is finite with order 192, so its action on the 16 byte positions can be exhaustively enumerated and each element tabulated in 16 bytes; the orientation-preserving subgroup yields 12 distinct tables (the 192-byte footprint in the comparison table). This makes the permutation layer a verifiable, parametric generator: the designer can enumerate every element, check it for invariant subspaces, and encode the selected one as a single pshufb. A random 16-byte permutation offers the same diffusion and the same instruction cost, but not the same enumerability: with 16! ~ 2^44.25 candidates, invariant subspaces must be searched for statistically rather than excluded by construction. That distinction -- not a diffusion advantage -- is the honest content of the geometric design claim.
+
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Does the Group Structure Exclude a Distinguisher Class?
+- - - - - - - - - - - - - - - - -
+
+The enumerability argument above is only interesting if one can name a distinguisher class that the enumeration excludes. We therefore measured the combinatorial invariants that a structural distinguisher on a byte-permutation layer would use -- fixed points, 4-byte word-plane preservation, transitivity on the 16 byte positions, cycle structure and parity -- for the 12 orientation-preserving SO(4) tables actually used by the cipher, and for 20 independent sets of 12 random byte permutations (tools/measure_so4_invariants.py). The result is a trade, not a win, and both sides must be reported.
+
+TABLE 17: Structural invariant profile of the 12 SO(4) tables versus 240 random byte permutations (20 sets of 12). Window: min/mean/max over the 20 random sets.
+
+  Invariant                      | SO(4)        | random (min/mean/max) | winner
+  -------------------------------|--------------|-----------------------|--------------
+  total fixed points             | 0 (of 192)   | 7 / 13.2 / 19         | SO(4)
+  transitive elements            | 0 / 12       | 0 / 0.7 / 2           | random (tie)
+  word-plane-preserving elements | 4 / 12       | 0 / 0.0 / 0           | random
+  even-parity elements           | 12 / 12      | 3 / 6.0 / 9           | (structural)
+
+The first row is a genuine, checkable advantage. The cipher's SO(4) table set contains no fixed point at all: every one of the 12 tables moves all 16 bytes, and because a group element that fixes a vertex fixes the corresponding coordinate, no SO(4) element can be position-stable. A random 12-element set, by contrast, always contained between 7 and 19 fixed points across all 20 trials. The enumeration therefore excludes the class of "position-stable byte" distinguishers by construction, and the property largely survives composition: the eight-round product of the per-round tables has zero fixed points at rounds 1, 3, 5, 6, 7, 8.
+
+The third row is a genuine weakness of the geometric layer that the same enumeration exposes rather than hides. Four of the 12 SO(4) tables (indices 0, 1, 10, 11) map each 4-byte word plane onto itself: they permute bytes only within a 32-bit word and never move a byte across words. Because the round sequence visits table indices (2r mod 12) = 0, 2, 4, 6, 8, 10, 0, 2, a plane-preserving table is selected in rounds 1, 6 and 7. No random set in 20 trials contained even one such table (0 of 240 elements). This is a real block-structure handle that a random permutation would not provide, and it is masked only because the ARX ripple mixes inside every 32-bit word independently of the permutation; the ablation of Section 8.3 shows that this masking is complete from round 3 onward. We report it because the enumerability claim would be dishonest if we used it only to advertise the fixed-point property while concealing the plane-preservation cost. The correct statement is that the group structure exchanges one structural property for another relative to a random permutation: it buys the zero-fixed-point guarantee and costs plane preservation. Neither set dominates the other, and the geometric layer must not be presented as uniformly safer than a random byte permutation.
+
+
+
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Can a Trail-Weight Advantage Be Demonstrated? A Failed Attempt and What It Shows
+- - - - - - - - - - - - - - - - -
+The two ablations above measure diffusion speed and combinatorial structure. Neither is an attack cost. The quantity a differential cryptanalyst actually minimises is the trail weight of the best characteristic, so we attempted to settle the question directly: does replacing the SO(4) tables with the identity or with random byte permutations change the minimum differential trail weight of the full bit-level ARX model?
+
+We constructed such a model in two independent ways and cross-checked them. The first is a linear program whose objective is the cumulative number of active difference bits, reusing verbatim the exact carry constraint set of milp_differential.py. The second is an exhaustive enumeration that pushes real byte values through the exact round function of src/rubik4d.c for every input difference of Hamming weight one. The two disagree by a factor of 18 to 60 (Table 18 below), and the direction of the disagreement is instructive: the linear program reports a cumulative weight of 1 for a single round, whereas a genuine one-bit input difference necessarily produces 60 active output bits. The relaxation is therefore selecting carry-absorption configurations that no real byte value realises -- precisely the failure mode already documented in our branch-number tool, where an early free-bit-difference model returned 3 for a quantity whose true value is 16.
+
+TABLE 18: Minimal differential trail weight (cumulative active bits) measured on real byte values. One-bit input differences, rounding to the exact rubik4d.c round function. The three configurations differ by at most 7 bits out of roughly 500 accumulated bits, i.e. below 1.5%; no configuration shows a structural advantage.
+
+  Rounds | SO(4) | Identity | Random | Verdict
+  -------+-------+----------+--------+------------------------
+       1 |    60 |       60 |     60 | indistinguishable
+       2 |   107 |      110 |    118 | below noise floor
+       3 |   168 |      168 |    175 | below noise floor
+
+The honest reading is that the bit-level linear relaxation is unusable for ARX trail-weight search without the carry-DDT machinery of Matsui-style bit masking, and that the ground-truth measurement it was meant to approximate shows no separation between the geometric layer and a random byte permutation. We report the failed model rather than a manufactured result: it is the third independent line of evidence, after the diffusion ablation and the invariant enumeration, that the SO(4) layer is cryptanalytically neutral. A reader who wishes to push further should replace the relaxation with a sound carry model; we predict, on the basis of the table above, that the conclusion will not change, and we would be glad to be proved wrong.
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Scope Limitations of Automated Search Models
+- - - - - - - - - - - - - - - - -
+
+We explicitly record the operational scope and inherent abstractions of our cryptanalytic tools:
+
+- Word-Level Truncated ID Abstraction: The automated impossible differential solver (\urltesseract_impossible_diff.py) operates at the truncated word/byte-level differential abstraction. It conservatively treats any non-zero difference in a 32-bit word as diffusing across byte boundaries via modular carry ripple. While this macroscopic model captures the essential topological coupling between SO(4) hypercube rotations and ARX feedback, it does not account for potential bit-level carry cancellations that might theoretically arise under specific low-weight bit configurations. Full bit-level MILP models remain a valuable avenue for independent evaluation.
+
+- Distinguishing Horizon vs. Key Recovery Complexity: All complexity metrics reported in Table represent lower bounds for the distinguishing phase under standard Biham-Shamir and Matsui models. Complete key-recovery attacks require appending key-guessing rounds before or after the distinguisher, incurring multiplicative computational overhead proportional to the guessed subkey entropy (O(N_D * 2^|K_guess|)). Full key-recovery attacks therefore demand strictly higher complexity than the distinguishing lower bounds.
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Call for Open Community Cryptanalysis
+- - - - - - - - - - - - - - - - -
+
+We explicitly invite independent researchers and cryptanalysts to evaluate Tesseract-128 against advanced cryptanalytic techniques, including:
+
+- Bit-based division property with degree evaluation for higher-order integral characteristics.
+
+- Differential-linear cryptanalysis combining short differential trails with linear approximations across the ARX ripple.
+
+- Physical side-channel leakage evaluations and masked algorithmic implementations on ultra-low-power microcontrollers (e.g., ARM Cortex-M0+).
+
+- - - - - - - - - - - - - - - - -
+SUBSECTION: Open-Source Artifacts and Reproducibility
+- - - - - - - - - - - - - - - - -
+
+In conformance with Elsevier's open research initiatives, all software implementations (Scalar C, SSSE3, AVX2 vector intrinsics), verification testbenches, automated MILP solvers (PuLP/CBC), and impossible differential search scripts are publicly accessible at the open research repository:
+
+\urlhttps://github.com/toilacobemongmo/Tesseract-128
+
+All empirical figures and solver results reported in this paper can be reproduced through single-command execution scripts provided in the repository.
+
+==================================================
+SECTION: Conclusion and Future Cryptanalysis
+==================================================
+
+We have presented Tesseract-128, a 128-bit symmetric block cipher with its authenticated encryption mode Tesseract-GCM, specifically engineered for resource-constrained telemetry and embedded environments that lack hardware AES-NI coprocessors. By replacing finite-field matrix operations with 4D hypercube SO(4) spatial rotations and 32-bit native ARX carry diffusion, the cipher eliminates the vulnerability and memory overhead of 4 KB AES T-tables while confining its total permutation state to an ultra-compact 192-byte table footprint. Within a word-level MILP model of the ARX carry chain, automated searches yield lower bounds of 78 active S-boxes against differential cryptanalysis (P_diff <= 2^-468) and 108 active S-boxes against linear cryptanalysis across 8 rounds; these are model-relative bounds, not proofs of security. Structural distinguishing advantages across impossible differential, integral, and zero-correlation attacks terminate by round 4 under the models we instantiate, leaving a 4-round margin that we do not claim extends beyond those models.
+
+In scalar software execution without hardware extensions, Tesseract-128 delivers 20.20 cycles/byte (166.56 MB/s), outperforming software AES-128 by 23.0\
+
+All implementation code, testbenches, and automated search scripts are provided as open-source artifacts. We encourage independent cryptanalysts to evaluate Tesseract-128 against advanced attack vectors, including bit-level division properties, differential-linear combinations, and physical side-channel leakages on low-power microcontrollers.
+
+We also report a negative result that bounds our own design claim. A controlled ablation (Section: Contribution of the SO(4) Layer) shows that the ARX ripple carries the cipher's bit-level diffusion: replacing the SO(4) permutation with the identity or with a random byte permutation leaves the full-diffusion round unchanged at round 3. We therefore do not attribute any mixing advantage to the geometric layer, and we present SO(4) as an enumerable, low-footprint generator of byte permutations rather than as a cryptanalytic improvement. A direct enumeration of the layer's structural invariants (Section: Does the Group Structure Exclude a Distinguisher Class?) sharpens this to a trade: the SO(4) tables have zero fixed points by construction -- a property a random permutation does not guarantee -- but four of the twelve preserve a 32-bit word plane, a structural handle absent from every random set we sampled. A third experiment (Section: Can a Trail-Weight Advantage Be Demonstrated?) attempts to measure the true attack metric, the minimum differential trail weight, and reports a failed method alongside its ground-truth substitute: the bit-level linear relaxation under-counts ARX trails by a factor of 18 to 60, and the exhaustive real-value measurement finds the three configurations within 1.5% of one another. We report all three so that the geometric layer is neither oversold nor unfairly dismissed. Independent work that identifies a measurable advantage of the SO(4) structure -- or that confirms its interchangeability -- would settle the question we deliberately leave open.

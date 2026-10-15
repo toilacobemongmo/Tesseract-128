@@ -66,14 +66,46 @@ Tesseract-128/
 │   ├── milp_impossible_diff.py # Automated miss-in-the-middle impossible differential search
 │   ├── milp_integral.py        # Division property / multiset integral attack search
 │   ├── verify_group_structure.py # Chiral hyperoctahedral group B_4^+ verification
-│   └── algebraic_degree.py     # ANF algebraic degree growth analysis
+│   ├── algebraic_degree.py     # ANF algebraic degree growth analysis
+│   ├── diffusion_analysis.py   # Bit-diffusion propagation profiling
+│   ├── attack_simulation.py    # End-to-end attack-cost simulation
+│   └── results_differential_arx.txt # Differential/ARX trail-weight solver log
+├── reports/                    # Machine-readable result artifacts backing the paper
+│   ├── benchmark.json          # Raw throughput/cycle measurements
+│   ├── sensitivity.json        # Key/plaintext avalanche results
+│   ├── key_schedule_sac.json   # SAC matrix for the key schedule
+│   └── benchmark_provenance_audit.txt # Claim-by-claim artifact mapping
+├── paper/                      # Manuscript and submission bundle (source of truth)
+│   ├── manuscript.tex          # Authoritative manuscript source
+│   ├── create_paper.py         # Assembles the elsarticle submission .tex
+│   ├── generate_figures.py     # Regenerates the five manuscript figures
+│   ├── build_paper.ps1         # One-shot manuscript build script
+│   ├── figures/                # fig_*.png referenced by the manuscript
+│   └── submission/             # Upload-ready bundle (PDF, LaTeX, forms, figures)
 └── tests/                      # Verification testbenches and performance profilers
     ├── test_vectors.c          # Known-Answer-Test (KAT) validation
     ├── test_benchmark.c        # Cycle-accurate rdtsc benchmarking harness
     ├── benchmark_iot_frames.c  # Automotive CAN-FD 64-byte frame profiling
     ├── test_key_schedule.c     # Strict Avalanche Criterion (SAC) & weak key analysis
+    ├── test_simd_gcm.c         # SIMD & AEAD (GCM) verification
     └── test_sensitivity.c     # Key/plaintext avalanche propagation profiling
 ```
+
+---
+
+## Manuscript
+
+The paper is not maintained on Overleaf; `paper/` is the single source of truth.
+To rebuild the submission PDF from source:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File paper/build_paper.ps1
+```
+
+This regenerates the figures, assembles `paper/build/manuscript_submission.tex`
+from `paper/manuscript.tex`, runs `pdflatex` twice, and copies the `.tex`/`.pdf`
+into `paper/submission/`. Expected result: **70 pages, 0 LaTeX errors,
+0 undefined references.** See `paper/README.md` for details.
 
 ---
 
