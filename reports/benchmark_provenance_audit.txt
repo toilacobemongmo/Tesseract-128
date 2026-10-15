@@ -125,6 +125,27 @@ HOST USED FOR RE-MEASUREMENT
   warmup + best-of-N protocol (BENCH_REPEATS=3) as the SIMD harness, and the
   iteration counts were reduced so total runtime stays practical. It is retained
   as a correctness/throughput comparison of the CBC wrapper, but the manuscript
+
+--------------------------------------------------------------------------------
+6. PUBLICATION-READINESS CHECKLIST APPLIED TO THIS ARTIFACT
+--------------------------------------------------------------------------------
+  [done] Warmup + best-of-N, minimum-time estimator, documented in code.
+  [done] Scheduling-priority raise so the numbers survive a busy desktop.
+  [done] Every headline figure traced to its generating source file (section 1),
+         with an explicit correction of the pshufb/AVX2 attribution error.
+  [done] A Measurement Methodology paragraph added to the manuscript, stating
+         the host, the __rdtsc reference-clock caveat, the estimator, and the
+         measured run-to-run spread.
+  [done] Section 4a records the negative result (12x error under preemption)
+         rather than hiding it, because a reviewer must be able to reproduce the
+         failure mode as well as the fix.
+  [done] The complete test suite (6 C targets + 4 Python models) recompiles and
+         re-runs green after every edit made during this review.
+  [done] reports/ is now tracked, so the JSON artifacts cited by the manuscript
+         ship with the repository instead of being silently gitignored.
+
+================================================================================
+
   must NOT cite its absolute cpb values as a headline claim; only the
   test_simd_gcm.c figures (stable to ~2%) are cited.
 
