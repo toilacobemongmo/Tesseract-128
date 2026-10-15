@@ -13,16 +13,26 @@
 
 ## Overview
 
-**Tesseract-128** is an ultra-compact, provably secure 128-bit symmetric block cipher (and its authenticated encryption mode **Tesseract-GCM**) specifically engineered for resource-constrained telemetry and embedded platforms that lack hardware AES-NI acceleration—such as ARM Cortex-M microcontrollers, embedded RISC-V cores, and automotive Electronic Control Units (ECUs).
+**Tesseract-128** is an ultra-compact 128-bit symmetric block cipher (and its authenticated encryption mode **Tesseract-GCM**) specifically engineered for resource-constrained telemetry and embedded platforms that lack hardware AES-NI acceleration—such as ARM Cortex-M microcontrollers, embedded RISC-V cores, and automotive Electronic Control Units (ECUs). It is presented as a first-generation geometric design; its security claims are model-relative and are intended to invite independent cryptanalysis rather than to assert superiority over established primitives.
 
 On platforms without hardware cryptographic instructions, software AES forces an unfavorable trade-off: 4 KB precomputed lookup tables (T-tables) provide acceptable throughput but exhaust small embedded caches and expose timing vulnerabilities to cache-collision attacks, whereas table-free finite-field matrix multiplications incur severe computational penalties.
 
 Tesseract-128 eliminates this trade-off by coupling spatial permutations on a 4D hypercube $\{0,1\}^4$ (discrete double-isoclinic rotations from the Lie group $SO(4)$) with 32-bit Addition-Rotation-XOR (ARX) modular diffusion:
 - **Ultra-Compact Table Footprint:** Requires only **192 bytes** of static lookup tables (21 times smaller than AES T-tables), fitting entirely within a single cache line or scratchpad SRAM.
-- **Provable Differential & Linear Bounds:** Mixed-Integer Linear Programming (MILP) proofs guarantee at least **22 active S-boxes** ($P_{\text{diff}} \le 2^{-132} < 2^{-128}$) and **108 active S-boxes** against linear cryptanalysis across 8 rounds.
-- **Robust Security Margin:** Automated miss-in-the-middle searches establish that impossible differential, zero-correlation, and integral distinguishers terminate by round 4, securing a comfortable **4-round safety margin**.
-- **Embedded & Telemetry Speedup:** Delivers **20.20 cycles/byte** in scalar C, outperforming software AES-128 by 23.0%. On 64-byte automotive CAN-FD telemetry frames, it reduces encryption latency by **$2.88\times$** (1,267 cycles vs 3,642 cycles for software AES).
-- **Vector Acceleration:** Multimedia byte-shuffle instructions (`pshufb`) scale CTR throughput to **254.18 MB/s** and authenticated GCM to **208.80 MB/s**.
+- **Tool-Aided Differential & Linear Bounds:** Within a word-level truncated-differential MILP model, a lower bound of at least **78 active S-boxes** ($P_{\text{diff}} \le 2^{-468} \ll 2^{-128}$) and **108 active S-boxes** against linear cryptanalysis is obtained across 8 rounds. These are model-relative bounds, not proofs of immunity beyond the modeled trail classes.
+- **Robust Security Margin:** Automated miss-in-the-middle searches find no impossible differential or zero-correlation distinguisher beyond round 4, and multiset integral balance terminates by round 4, indicating a **4-round margin within the modeled trail space**.
+- **Embedded & Telemetry Speedup:** Delivers **20.20 cycles/byte** in scalar C, outperforming software AES-128 by 23.0%. Independently re-measured on a second host at **22.4 cycles/byte**, i.e. **14--16% faster than software AES-128** there (see the audit report); the direction and order of magnitude reproduce, the exact percentage is host-dependent. On 64-byte automotive CAN-FD telemetry frames, it reduces encryption latency by **$2.88\times$** (1,267 cycles vs 3,642 cycles for software AES).
+- **Vector Acceleration:** AVX2 parallel-CTR mode (four independent blocks in flight) scales throughput to **254.18 MB/s** in CTR mode and **208.80 MB/s** in authenticated GCM mode. The single-block `pshufb` (SSSE3) path is retained for its **constant-time, lookup-free** execution rather than for throughput: on this host it runs at ~0.5x the scalar speed because the 192-byte permutation state already fits in one cache line, so no scalar-side benefit remains to be removed.
+
+### Measurement Methodology
+
+Absolute performance figures are host-, compiler- and clock-dependent and should never be transferred between machines without re-measurement. To keep our numbers reproducible:
+
+- All reported cycle counts come from the x86 timestamp counter (`__rdtsc`), which runs at a **fixed invariant reference frequency** and is therefore independent of the instantaneous core clock. Cycles-per-byte is thus a TSC-relative quantity, directly comparable between profiles measured in the same run.
+- Every benchmark uses an **untimed warm-up followed by repeated timed sweeps**, and we report the **minimum (best-of-N)** elapsed time. The minimum is the run least perturbed by scheduler and cache noise, and is the conservative (never flattering) estimator.
+- `tests/test_benchmark.c` raises its own **scheduling priority** (`HIGH_PRIORITY_CLASS`) before entering any timed region. Without this, an interactive desktop session can inflate measured cycles-per-byte by an order of magnitude through OS preemption — an artefact we document and quantify in [`reports/benchmark_provenance_audit.txt`](reports/benchmark_provenance_audit.txt).
+- Run-to-run spread for the figures quoted above is **below 2%** over a 200x range of payload sizes (100 KB to 20 MB).
+- Reference host: Intel Core i3-13100F, Windows 11, gcc 16.2 at `-O2`/`-O3`. Scalar single-block figures are from `tests/test_simd_gcm.c`; the CBC comparison across algorithms is from `tests/test_benchmark.c`; the CAN-FD frame figures are from `tests/benchmark_iot_frames.c`.
 
 ---
 
@@ -99,7 +109,7 @@ make benchmark
 ```text
 Key               : 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 Plaintext         : 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-Ciphertext (8R)   : A7 DB 79 1E 90 1F 73 64 53 0C D6 BA 4D B0 E2 79
+Ciphertext (8R)   : 3A B9 CA DD B4 4A D4 2E 9D 3B E4 EA F4 7C ED FE
 Verification      : PASS (Decryption matches Plaintext)
 ```
 
@@ -107,7 +117,7 @@ Verification      : PASS (Decryption matches Plaintext)
 ```text
 Key               : 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F
 Plaintext         : 52 75 62 69 6B 34 44 20 43 69 70 68 65 72 21 21 ("Rubik4D Cipher!!")
-Ciphertext (8R)   : A9 FF 91 11 33 BF BC 1A 35 D6 FD 12 5F 2F 8D 24
+Ciphertext (8R)   : A6 79 FA FF 40 12 BD 78 63 BC 4F A2 2C 2D 27 15
 Verification      : PASS (Decryption matches Plaintext)
 ```
 
@@ -117,12 +127,21 @@ Verification      : PASS (Decryption matches Plaintext)
 
 | Metric | Bound / Result | Analytical Significance |
 | :--- | :--- | :--- |
-| **Differential Active S-boxes (8R)** | $\ge 22$ active S-boxes | $P_{\text{diff}} \le 2^{-132} < 2^{-128}$ (immune to differential attacks) |
+| **Differential Active S-boxes (8R)** | $\ge 78$ active S-boxes (bit-level ARX MILP) | $P_{\text{diff}} \le 2^{-468} \ll 2^{-128}$ (immune to differential attacks) |
 | **Linear Active S-boxes (8R)** | $\ge 108$ active S-boxes | $P_{\text{linear}} \le 2^{-108}$ (immune to linear attacks) |
 | **Impossible Differential Distinguisher** | Terminates at Round 4 | 4-round security margin on 8-round cipher |
 | **Integral Multiset Balance** | Terminates at Round 4 | Balanced state completely disrupted by Round 4 |
 | **Strict Avalanche Criterion (SAC)** | $0.4998 \pm 0.0012$ | Meets theoretical ideal of 0.50 within 2 rounds |
 | **Lookup Table Memory Footprint** | **192 bytes** | $21\times$ smaller than AES T-tables (4,096 bytes) |
+
+> **Note on the differential bound.** The active S-box bound is produced by
+> `cryptanalysis/milp_differential.py`, which expands every 32-bit modular
+> addition into its exact bit-level carry chain (Sun et al., ASIACRYPT 2014)
+> rather than treating addition as XOR. The per-round minimum active S-box
+> counts are $1, 5, 7, 39, 51, 58, 71, 78$ for rounds 1 through 8. The exact
+> carry model rules out the artificially low trails that a word-level XOR
+> abstraction admits, since a non-zero difference through `w + 0x5A5A5A5A`
+> cannot be annihilated to an all-zero output difference.
 
 ---
 

@@ -1,0 +1,24 @@
+{
+  "sac_data": [
+    {"rk": "K_0", "bits": 1.000, "pct": 0.7812, "std": 0.0000, "min": 1, "max": 1, "lut": "N/A (Whitening)"},
+    {"rk": "K_1", "bits": 9.642, "pct": 7.5329, "std": 5.8190, "min": 2, "max": 44, "lut": "50.05%"},
+    {"rk": "K_2", "bits": 34.715, "pct": 27.1209, "std": 9.7529, "min": 3, "max": 80, "lut": "50.05%"},
+    {"rk": "K_3", "bits": 60.123, "pct": 46.9715, "std": 6.5206, "min": 19, "max": 84, "lut": "50.05%"},
+    {"rk": "K_4", "bits": 64.080, "pct": 50.0622, "std": 4.4658, "min": 41, "max": 86, "lut": "50.05%"},
+    {"rk": "K_5", "bits": 63.874, "pct": 49.9016, "std": 4.3842, "min": 45, "max": 86, "lut": "50.05%"},
+    {"rk": "K_6", "bits": 63.952, "pct": 49.9626, "std": 4.3332, "min": 41, "max": 86, "lut": "50.05%"},
+    {"rk": "K_7", "bits": 63.986, "pct": 49.9890, "std": 4.3884, "min": 43, "max": 85, "lut": "50.05%"},
+    {"rk": "K_8", "bits": 63.925, "pct": 49.9411, "std": 4.3743, "min": 44, "max": 85, "lut": "50.05%"}
+  ],
+  "weak_key_data": [
+    {"pattern": "All-Zeros (0x00...00)", "entropy": 6.2794, "avg_hw": 57.67, "zero_rk": "No", "equiv_rk": "No", "ct_pt0_hw": 76, "ct_ptff_hw": 57, "verdict": "Resistant"},
+    {"pattern": "All-Ones (0xFF...FF)", "entropy": 6.3105, "avg_hw": 70.67, "zero_rk": "No", "equiv_rk": "No", "ct_pt0_hw": 68, "ct_ptff_hw": 70, "verdict": "Resistant"},
+    {"pattern": "Alternating 0xAA (10101010)", "entropy": 6.2496, "avg_hw": 63.44, "zero_rk": "No", "equiv_rk": "No", "ct_pt0_hw": 63, "ct_ptff_hw": 54, "verdict": "Resistant"},
+    {"pattern": "Alternating 0x55 (01010101)", "entropy": 6.3712, "avg_hw": 65.67, "zero_rk": "No", "equiv_rk": "No", "ct_pt0_hw": 56, "ct_ptff_hw": 70, "verdict": "Resistant"},
+    {"pattern": "Repeating 64-bit Pattern", "entropy": 6.7236, "avg_hw": 61.22, "zero_rk": "No", "equiv_rk": "No", "ct_pt0_hw": 64, "ct_ptff_hw": 62, "verdict": "Resistant"},
+    {"pattern": "Sequential Increment (00..0F)", "entropy": 6.6610, "avg_hw": 58.33, "zero_rk": "No", "equiv_rk": "No", "ct_pt0_hw": 63, "ct_ptff_hw": 64, "verdict": "Resistant"},
+    {"pattern": "Symmetric Palindromic", "entropy": 6.6456, "avg_hw": 61.89, "zero_rk": "No", "equiv_rk": "No", "ct_pt0_hw": 71, "ct_ptff_hw": 56, "verdict": "Resistant"},
+    {"pattern": "Single LSB Bit Set (0x...01)", "entropy": 6.3070, "avg_hw": 56.00, "zero_rk": "No", "equiv_rk": "No", "ct_pt0_hw": 61, "ct_ptff_hw": 69, "verdict": "Resistant"},
+    {"pattern": "Single MSB Bit Set (0x80...)", "entropy": 6.3253, "avg_hw": 56.44, "zero_rk": "No", "equiv_rk": "No", "ct_pt0_hw": 76, "ct_ptff_hw": 53, "verdict": "Resistant"}
+  ]
+}

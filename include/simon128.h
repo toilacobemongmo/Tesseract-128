@@ -8,10 +8,10 @@
 extern "C" {
 #endif
 
-#define SIMON128_BLOCK_SIZE  16   // Khối 128 bit (hai nhánh 64 bit x, y)
-#define SIMON128_KEY_SIZE    16   // Khóa chính 128 bit
-#define SIMON128_ROUNDS      68   // 68 vòng chuẩn của SIMON-128/128
-#define SIMON128_IV_SIZE     16   // Vector khởi tạo CBC 16 byte
+#define SIMON128_BLOCK_SIZE  16   // 128-bit block (two 64-bit branches x, y)
+#define SIMON128_KEY_SIZE    16   // 128-bit master key
+#define SIMON128_ROUNDS      68   // 68 rounds, standard SIMON-128/128
+#define SIMON128_IV_SIZE     16   // 16-byte CBC initialisation vector
 
 void simon128_generate_round_keys(const uint8_t *key, size_t key_len, uint64_t round_keys[SIMON128_ROUNDS]);
 void simon128_encrypt_block(const uint8_t in[SIMON128_BLOCK_SIZE], 

@@ -16,7 +16,7 @@ void simon128_generate_round_keys(const uint8_t *key, size_t key_len, uint64_t r
     uint8_t formatted_key[16];
     derive_128bit_key(key, key_len, formatted_key);
 
-    // Chuỗi hằng số z_4 (tuần hoàn chu kỳ 62)
+    // Sequence of z_4 constants (period 62)
     static const uint64_t z4 = 0x7369F885192C0EF5ULL;
     static const uint64_t c = 0xFFFFFFFFFFFFFFFCULL;
 

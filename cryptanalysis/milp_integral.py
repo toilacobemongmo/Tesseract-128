@@ -1,4 +1,4 @@
-# 1. BẢNG S-BOX VÀ KHỞI TẠO BẢNG HOÁN VỊ SO(4)
+# 1. S-BOX TABLE AND SO(4) PERMUTATION TABLE INITIALIZATION
 SBOX = [
     0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
     0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0, 0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0,
@@ -71,7 +71,7 @@ def encrypt_rounds(plain, key, rounds):
 
 def main():
     print("=" * 80)
-    print("KIỂM THỬ KHÁNG TẤN CÔNG TÍCH PHÂN (INTEGRAL / SQUARE DISTINGUISHER)")
+    print("INTEGRAL / SQUARE DISTINGUISHER RESISTANCE TEST")
     print("=" * 80)
     key = [0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6, 0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, 0x3C]
     
@@ -85,8 +85,8 @@ def main():
                 xor_sum[i] ^= ct[i]
         
         balanced_bytes = sum(1 for x in xor_sum if x == 0)
-        status = f"Phát hiện đặc trưng (Tổng XOR = 0 tại {balanced_bytes}/16 bytes)" if balanced_bytes == 16 else "Phá vỡ cấu trúc tích phân (Miễn nhiễm)"
-        print(f"Vòng {r}: Số byte đạt cân bằng: {balanced_bytes:>2}/16 | Trạng thái: {status}")
+        status = f"DISTINGUISHER EXISTS (XOR sum = 0 over {balanced_bytes}/16 bytes)" if balanced_bytes == 16 else "INTEGRAL STRUCTURE BROKEN (immune)"
+        print(f"Round {r}: Balanced bytes: {balanced_bytes:>2}/16 | Status: {status}")
     print("=" * 80)
 
 if __name__ == "__main__":

@@ -27,4 +27,9 @@ Thumbs.db
 build/
 bin/
 *.log
-reports/
+
+# The reports/ directory is NOT ignored: it holds the machine-readable result
+# artifacts (benchmark.json, sensitivity.json, key_schedule_sac.json, ...) that
+# back every empirical claim in the manuscript and are required for independent
+# reproduction. Only transient scratch files are excluded below.
+reports/*.tmp

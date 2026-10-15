@@ -88,6 +88,48 @@ double rubik4d_calculate_entropy(const uint8_t *data, size_t len) {
     return entropy;
 }
 
+// Golden-ratio round constants: rc[r][k] = floor(2^32 * frac((4r + k + 1) * phi))
+// Generated offline from the fractional part of phi = (1 + sqrt(5)) / 2, providing
+// asymmetric, fixed-point-free constants that break round symmetry.
+static const uint32_t RC_TABLE[9][4] = {
+    { 0x00000000, 0x00000000, 0x00000000, 0x00000000 }, // unused: K_0 = MK (whitening)
+    { 0x1715609F, 0xB54CDA58, 0x53845412, 0xF1BBCDCB },
+    { 0x8FF34785, 0x2E2AC13E, 0xCC623AF8, 0x6A99B4B1 },
+    { 0x08D12E6B, 0xA708A824, 0x454021DE, 0xE3779B97 },
+    { 0x81AF1551, 0x1FE68F0A, 0xBE1E08C4, 0x5C55827D },
+    { 0xFA8CFC37, 0x98C475F0, 0x36FBEFAA, 0xD5336963 },
+    { 0x736AE31D, 0x11A25CD6, 0xAFD9D690, 0x4E115049 },
+    { 0xEC48CA03, 0x8A8043BC, 0x28B7BD76, 0xC6EF372F },
+    { 0x6526B0E9, 0x035E2AA2, 0xA195A45C, 0x3FCD1E15 }
+};
+
+// SubWord: apply the AES S-box to each of the four bytes of a 32-bit word.
+static uint32_t sub_word(uint32_t v) {
+    return ((uint32_t)AES_SBOX[(v >> 24) & 0xFF] << 24) |
+           ((uint32_t)AES_SBOX[(v >> 16) & 0xFF] << 16) |
+           ((uint32_t)AES_SBOX[(v >>  8) & 0xFF] <<  8) |
+           ((uint32_t)AES_SBOX[ v        & 0xFF]);
+}
+
+// k_fold derivation. Folds a 128-bit state into a single byte so that all 256
+// permutation schedules are reachable. A rotate-multiply mixer precedes the fold so
+// that no single key byte localizes to a single output bit.
+static uint8_t derive_k_fold(const uint8_t st[16]) {
+    uint32_t acc = 0x243F6A88u;              // fractional part of pi (nothing-up-my-sleeve)
+    for (int i = 0; i < 16; i++) {
+        uint32_t x = (uint32_t)st[i] ^ (uint32_t)(i * 0x9E3779B9u);
+        x = ROTL32(x * 0x85EBCA6Bu, 7) ^ (x >> 3);
+        acc ^= x;
+        acc = ROTL32(acc, 5) + 0x165667B1u;
+    }
+    acc ^= acc >> 16;
+    acc *= 0x7FEB352Du;
+    acc ^= acc >> 15;
+    acc *= 0x846CA68Bu;
+    acc ^= acc >> 16;
+    return (uint8_t)(acc & 0xFF);
+}
+
 // Key schedule
 void rubik4d_key_setup(rubik4d_ctx *ctx, const uint8_t *key, size_t key_len) {
     rubik4d_init_tables();
@@ -98,17 +140,42 @@ void rubik4d_key_setup(rubik4d_ctx *ctx, const uint8_t *key, size_t key_len) {
         for (size_t i = 0; i < key_len; i++) master[i % 16] ^= key[i];
     }
 
-    uint8_t k_fold = 0;
-    for (int i = 0; i < 16; i++) k_fold ^= master[i];
-
     memcpy(ctx->round_keys[0], master, 16);
+
     for (int r = 1; r <= 8; r++) {
-        for (int i = 0; i < 16; i++) {
-            ctx->round_keys[r][i] = AES_SBOX[ctx->round_keys[r - 1][(i + 3) % 16]] ^ (uint8_t)(r * 0x1B);
-        }
-        int tbl_idx = ((r + (k_fold & 7)) % 6) * 2 + ((k_fold >> 3) & 1);
-        ctx->perm_lut[r] = PERM_TABLES[tbl_idx];
+        // 1. SO(4) hypercube permutation of the previous subkey:
+        //    K'_r = R_{sigma(r)}(K_{r-1}), sigma(r) = (r - 1) mod 6.
+        int tbl_idx = (((r - 1) % 6) * 2) + (r & 1);
+        const uint8_t *perm = PERM_TABLES[tbl_idx];
+        uint8_t kp[16];
+        for (int i = 0; i < 16; i++) kp[i] = ctx->round_keys[r - 1][perm[i]];
+
+        // 2. Serial ARX word chain with round-constant injection. Each word absorbs all
+        //    preceding words plus a non-linear SubWord, so a single master-key bit
+        //    reaches every byte of K_r after one round.
+        uint32_t w0, w1, w2, w3;
+        memcpy(&w0, kp +  0, 4);
+        memcpy(&w1, kp +  4, 4);
+        memcpy(&w2, kp +  8, 4);
+        memcpy(&w3, kp + 12, 4);
+
+        w0 = ROTL32(w0 + sub_word(w3) + RC_TABLE[r][0], 11);
+        w1 = ROTL32(w1 + w0          + RC_TABLE[r][1], 13);
+        w2 = ROTL32(w2 + w1          + RC_TABLE[r][2], 17);
+        w3 = ROTL32(w3 + w2          + RC_TABLE[r][3], 19);
+
+        memcpy(ctx->round_keys[r] +  0, &w0, 4);
+        memcpy(ctx->round_keys[r] +  4, &w1, 4);
+        memcpy(ctx->round_keys[r] +  8, &w2, 4);
+        memcpy(ctx->round_keys[r] + 12, &w3, 4);
+
+        // 3. Derive the permutation-table selector from the new subkey (full 8 bits),
+        //    so the SO(4) schedule varies with every bit of the master key.
+        ctx->k_fold = derive_k_fold(ctx->round_keys[r]);
+        ctx->perm_lut[r] = PERM_TABLES[((r + (ctx->k_fold & 7)) % 6) * 2 + ((ctx->k_fold >> 3) & 1)];
     }
+    ctx->k_fold = derive_k_fold(ctx->round_keys[8]);
+    ctx->perm_lut[0] = PERM_TABLES[0];
 }
 
 void rubik4d_generate_round_keys(const uint8_t *key, size_t key_len, uint8_t round_keys[9][16]) {
@@ -120,16 +187,14 @@ void rubik4d_generate_round_keys(const uint8_t *key, size_t key_len, uint8_t rou
 void rubik4d_encrypt_block(const uint8_t in[16], uint8_t out[16], const uint8_t round_keys[9][16]) {
     rubik4d_ctx ctx;
     memcpy(ctx.round_keys, round_keys, sizeof(ctx.round_keys));
-    
-    uint8_t k_fold = 0;
-    for (int i = 0; i < 16; i++) k_fold ^= ctx.round_keys[0][i];
-    
+
     rubik4d_init_tables();
+    ctx.k_fold = derive_k_fold(ctx.round_keys[8]);
     for (int r = 1; r <= 8; r++) {
-        int tbl_idx = ((r + (k_fold & 7)) % 6) * 2 + ((k_fold >> 3) & 1);
-        ctx.perm_lut[r] = PERM_TABLES[tbl_idx];
+        ctx.perm_lut[r] = PERM_TABLES[((r + (ctx.k_fold & 7)) % 6) * 2 + ((ctx.k_fold >> 3) & 1)];
     }
-    
+    ctx.perm_lut[0] = PERM_TABLES[0];
+
     rubik4d_encrypt_block_fast(&ctx, in, out);
 }
 

@@ -13,7 +13,7 @@ $(TARGET_TEST): tests/test_vectors.c src/rubik4d.c
 $(TARGET_BENCH): tests/test_benchmark.c src/rubik4d.c src/aes128.c src/speck128.c src/simon128.c src/chacha20.c
 	$(CC) $(CFLAGS) -o $@ $^
 
-$(TARGET_IOT): tests/benchmark_iot_frames.c src/rubik4d.c src/rubik4d_gcm.c src/aes128.c
+$(TARGET_IOT): tests/benchmark_iot_frames.c src/rubik4d.c src/rubik4d_simd.c src/rubik4d_gcm.c src/aes128.c src/chacha20.c
 	$(CC) $(CFLAGS) -o $@ $^
 
 test: $(TARGET_TEST)

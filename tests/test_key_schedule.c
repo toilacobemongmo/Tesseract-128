@@ -7,7 +7,7 @@
 
 #define NUM_SAC_SAMPLES 10000
 
-// Đếm số bit 1 khác nhau giữa 2 mảng byte (Hamming distance)
+// Count differing set bits between two byte arrays (Hamming distance)
 static inline int count_bit_diff(const uint8_t *a, const uint8_t *b, size_t len) {
     int diff = 0;
     for (size_t i = 0; i < len; i++) {
@@ -16,7 +16,7 @@ static inline int count_bit_diff(const uint8_t *a, const uint8_t *b, size_t len)
     return diff;
 }
 
-// Đếm Hamming Weight (số bit 1) của mảng byte
+// Count the Hamming weight (number of set bits) of a byte array
 static inline int hamming_weight(const uint8_t *a, size_t len) {
     int w = 0;
     for (size_t i = 0; i < len; i++) {
@@ -25,7 +25,7 @@ static inline int hamming_weight(const uint8_t *a, size_t len) {
     return w;
 }
 
-// Tính Shannon entropy của mảng byte
+// Compute the Shannon entropy of a byte array
 static double calculate_entropy(const uint8_t *data, size_t len) {
     if (len == 0) return 0.0;
     uint64_t counts[256] = {0};
@@ -41,7 +41,7 @@ static double calculate_entropy(const uint8_t *data, size_t len) {
     return entropy;
 }
 
-// Sinh mảng byte ngẫu nhiên an toàn bằng Xorshift128+
+// Generate a random byte array using Xorshift128+
 typedef struct {
     uint64_t s[2];
 } xoroshiro_ctx;
@@ -77,7 +77,7 @@ void run_key_schedule_sac_test(void) {
     xoroshiro_ctx rng = { .s = { 0x123456789ABCDEF0ULL, 0x0FEDCBA987654321ULL } };
     rubik4d_init_tables();
 
-    // Thống kê cho từng round key K_0 đến K_8
+    // Statistics for each round key K_0 through K_8
     double sum_diff[9] = {0.0};
     double sum_diff_sq[9] = {0.0};
     int min_diff[9];
@@ -87,7 +87,7 @@ void run_key_schedule_sac_test(void) {
         max_diff[r] = 0;
     }
 
-    // Thống kê thay đổi bảng hoán vị SO(4)
+    // Statistics on changes in the SO(4) permutation tables
     int perm_diff_count[9] = {0};
 
     for (int sample = 0; sample < NUM_SAC_SAMPLES; sample++) {
@@ -95,7 +95,7 @@ void run_key_schedule_sac_test(void) {
         fill_random(&rng, k1, 16);
         memcpy(k2, k1, 16);
 
-        // Lật đúng 1 bit ngẫu nhiên trong master key (128 bit)
+        // Flip exactly one random bit of the 128-bit master key
         int bit_idx = (int)(xoroshiro_next(&rng) % 128);
         k2[bit_idx / 8] ^= (1 << (bit_idx % 8));
 
@@ -143,7 +143,7 @@ void run_key_schedule_sac_test(void) {
                r, mean_bits, mean_pct, std_dev_pct, min_max_str, perm_str);
     }
 
-    // Tính trung bình SAC từ K_1 đến K_8
+    // Average SAC over K_1 through K_8
     double total_sac = 0.0;
     for (int r = 1; r <= 8; r++) {
         total_sac += (sum_diff[r] / NUM_SAC_SAMPLES / 128.0) * 100.0;
@@ -213,10 +213,10 @@ void run_weak_key_analysis(void) {
             }
         }
 
-        // Kiểm tra entropy của toàn bộ 144 bytes round keys
+        // Check the entropy of the complete 144-byte round-key material
         double total_entropy = calculate_entropy((const uint8_t*)ctx.round_keys, 9 * 16);
 
-        // Kiểm tra mã hóa bản rõ all-zero và all-one xem ciphertext có bị suy biến không
+        // Encrypt all-zero and all-one plaintexts to check for degenerate ciphertext
         uint8_t pt_zero[16] = {0};
         uint8_t ct_zero[16] = {0};
         rubik4d_encrypt_block_fast(&ctx, pt_zero, ct_zero);
@@ -243,7 +243,7 @@ void run_weak_key_analysis(void) {
     }
 }
 
-// Hàm ghi kết quả thực nghiệm ra file JSON để script tạo báo cáo đọc trực tiếp
+// Write experimental results to JSON for the report generator to consume directly
 static void export_json_results(void) {
     xoroshiro_ctx rng = { .s = { 0x123456789ABCDEF0ULL, 0x0FEDCBA987654321ULL } };
     rubik4d_init_tables();

@@ -67,7 +67,7 @@ void chacha20_xor(chacha20_ctx *ctx, const uint8_t *in, uint8_t *out, size_t len
     uint8_t block[64];
     while (len > 0) {
         chacha20_block(ctx, block);
-        ctx->state[12]++; // Tăng block counter
+        ctx->state[12]++; // Increment block counter
 
         size_t n = (len < 64) ? len : 64;
         for (size_t i = 0; i < n; i++) {
@@ -96,11 +96,11 @@ size_t chacha20_encrypt(const uint8_t *in, size_t in_len, uint8_t *out,
     chacha20_ctx ctx;
     chacha20_init(&ctx, k, n, 1);
     chacha20_xor(&ctx, in, out, in_len);
-    return in_len; // Stream cipher không cần padding
+    return in_len; // Stream cipher: no padding required
 }
 
 size_t chacha20_decrypt(const uint8_t *in, size_t in_len, uint8_t *out, 
                         const uint8_t *key, size_t key_len, const uint8_t *iv) {
-    // Mã dòng đối xứng: giải mã giống hệt mã hóa
+    // Symmetric stream cipher: decryption is identical to encryption
     return chacha20_encrypt(in, in_len, out, key, key_len, iv);
 }

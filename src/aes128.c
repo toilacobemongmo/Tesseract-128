@@ -160,7 +160,7 @@ size_t aes128_encrypt(const uint8_t *in, size_t in_len, uint8_t *out, const uint
         for (int j = 0; j < 16; j++) {
             size_t idx = i + j;
             block[j] = (idx < in_len) ? in[idx] : pad;
-            block[j] ^= current_iv[j]; // Chuỗi khối CBC
+            block[j] ^= current_iv[j]; // CBC block chaining
         }
         aes128_encrypt_block(block, out + i, round_keys);
         memcpy(current_iv, out + i, 16);
@@ -183,7 +183,7 @@ size_t aes128_decrypt(const uint8_t *in, size_t in_len, uint8_t *out, const uint
     for (size_t i = 0; i < in_len; i += 16) {
         aes128_decrypt_block(in + i, out + i, round_keys);
         for (int j = 0; j < 16; j++) {
-            out[i + j] ^= current_iv[j]; // Giải mã chuỗi khối CBC
+            out[i + j] ^= current_iv[j]; // CBC block chaining (decryption)
         }
         memcpy(current_iv, in + i, 16);
     }

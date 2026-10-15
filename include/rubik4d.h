@@ -16,6 +16,7 @@ extern "C" {
 typedef struct {
     uint8_t round_keys[9][16];
     const uint8_t* perm_lut[9];
+    uint8_t k_fold;   // full-byte schedule selector derived from the final subkey
 } rubik4d_ctx;
 
 void rubik4d_init_tables(void);

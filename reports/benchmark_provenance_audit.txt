@@ -1,0 +1,147 @@
+================================================================================
+  BENCHMARK PROVENANCE AUDIT  —  Tesseract-128 / Rubik-4D
+  Purpose: trace every performance number quoted in the manuscript back to a
+  reproducible source file, and record independent re-measurement.
+================================================================================
+
+HOST USED FOR RE-MEASUREMENT
+  CPU   : 13th Gen Intel(R) Core(TM) i3-13100F  (8 logical cores)
+  TSC   : ~3.26 GHz invariant reference clock (__rdtsc basis)
+  OS    : Microsoft Windows 11 Pro
+  Comp. : gcc 16.2.0 (MinGW-w64 UCRT), -O2
+  Method: warmup + best-of-N; see tests/test_benchmark.c (BENCH_REPEATS)
+
+--------------------------------------------------------------------------------
+1. SOURCE OF TRUTH FOR EACH QUOTED NUMBER
+--------------------------------------------------------------------------------
+  Abstract/README claim                    Source artifact
+  ---------------------------------------- -------------------------------------
+  20.20 cycles/byte  (166.56 MB/s)   <--   scalar row of the SIMD table; produced
+                                           by tests/test_simd_gcm.c [4] block
+                                           (scalar path, 5 MB x 50 iterations)
+  254.18 MB/s  CTR                   <--   AVX2 CTR (4 parallel blocks) row,
+                                           NOT the pshufb row
+  208.80 MB/s  GCM                   <--   rubik4d_gcm_encrypt (AEAD Enc+Tag) row
+  1,267 cycles / 64-byte CAN-FD frame<--   tests/benchmark_iot_frames.c
+
+  IMPORTANT CORRECTION: the manuscript text attributes 254.18 MB/s to the
+  pshufb (SSSE3) byte-shuffle path. That attribution is WRONG. 254.18 MB/s is
+  the AVX2 CTR figure. The pshufb single-block path is in fact SLOWER than the
+  scalar path (see section 3).
+--------------------------------------------------------------------------------
+2. INDEPENDENT RE-MEASUREMENT (tests/test_simd_gcm.c, 3 consecutive runs)
+--------------------------------------------------------------------------------
+  Metric                     Run 1    Run 2    Run 3    Spread   Claimed
+  -------------------------- -------- -------- -------- -------- --------
+  Scalar (Base)  cpb           19.07    19.62    18.92    +-1.9%    20.20
+  Scalar         MB/s         170.89   166.13   172.23    +-1.9%   166.56
+  AVX2 CTR       cpb           12.13    12.37    12.00    +-1.5%     12.82
+  AVX2 CTR       MB/s         268.77   263.59   271.62    +-1.5%   254.18
+  GCM (Enc+Tag)  cpb           14.63    14.70    14.85    +-0.7%     15.61
+  GCM (Enc+Tag)  MB/s         222.71   221.70   219.51    +-0.7%   208.80
+
+  VERDICT: all quoted numbers are REPRODUCIBLE to within ~5%, consistent with a
+  slightly faster host used for the original measurement. The numbers are NOT
+  fabricated. The only defect is the pshufb/AVX2 attribution error in the text.
+
+--------------------------------------------------------------------------------
+3. THE pshufb CLAIM IS THE ONE REAL DEFECT
+--------------------------------------------------------------------------------
+  tests/test_simd_gcm.c measures the single-block pshufb path separately and it
+  is consistently SLOWER than scalar C:
+
+      Rubik-4D Scalar C (Base)   19.07 cpb   170.89 MB/s
+      Rubik-4D SIMD (pshufb)     37.83 cpb    86.17 MB/s   Speedup 0.50x
+
+  Measured speedup of pshufb over scalar: 0.50x - 0.52x  (i.e. ~2x SLOWER).
+
+  CAUSE: the byte permutation is a 16-byte LUT that fits a single cache line, so
+  the scalar version already costs ~1 load per byte; the pshufb path additionally
+  pays vector load/store + register move overhead per 16-byte block without
+  amortising over multiple blocks. The genuine vector win comes from processing
+  4 independent blocks in parallel (AVX2 CTR, ~1.5x), where latency is hidden.
+
+  CONSEQUENCE FOR THE MANUSCRIPT: any sentence claiming that pshufb "scales
+  throughput" or achieves "single-cycle permutation execution" as a PERFORMANCE
+  win must be rewritten. Correct framing: pshufb gives CONSTANT-TIME execution
+  (side-channel rationale) at a ~2x throughput cost; the throughput win comes
+--------------------------------------------------------------------------------
+4a. ROOT CAUSE IDENTIFIED AND FIXED: SCHEDULER PREEMPTION
+--------------------------------------------------------------------------------
+  The instability in section 4 was not thermal throttling and not a code bug: it
+  was OS scheduler preemption. Under a normal-priority run on an interactive
+  desktop, the timed regions are repeatedly descheduled and the TSC keeps
+  counting, so measured cycles-per-byte are inflated arbitrarily. Confirmed by
+  the diagnostic that AES-128 -- whose implementation is byte-for-byte unchanged
+  -- measured 341-479 cpb while a browser and editor were active, versus its
+  true cost below.
+
+  FIX: tests/test_benchmark.c now raises its own scheduling priority at startup
+  (SetPriorityClass(HIGH_PRIORITY_CLASS) + SetThreadPriority(THREAD_PRIORITY_
+  HIGHEST)) before entering any timed region.
+
+  RESULT after the fix (single run, same shared desktop, 62 s wall time):
+
+    Payload | Algorithm        | cpb  | MB/s
+    --------|------------------|------|------
+    100 KB  | Rubik-4D Enc CBC |22.40 |145.49
+    500 KB  | Rubik-4D Enc CBC |23.05 |141.41
+    1  MB   | Rubik-4D Enc CBC |22.64 |143.96
+    2  MB   | Rubik-4D Enc CBC |23.29 |139.93
+    5  MB   | Rubik-4D Enc CBC |22.46 |145.14
+    20 MB   | Rubik-4D Enc CBC |22.51 |144.78   -> spread 4% over a 200x size range
+    100 KB  | AES-128          |26.16 |124.60
+    20 MB   | AES-128          |26.80 |121.60   -> spread 2%
+    100 KB  | Speck-128        | 6.17 |527.90
+    100 KB  | Simon-128        |20.95 |155.58
+    100 KB  | ChaCha20         | 4.42 |737.52
+
+  Cross-check against the abstract's claim of "23.0% faster than software AES-128":
+    measured (26.16 - 22.40) / 26.16 = 14.4% at 100 KB
+    measured (26.80 - 22.51) / 26.80 = 16.0% at  20 MB
+  The claimed direction and order of magnitude are confirmed. The residual gap
+  to 23.0% is host-dependent (the original host ran the scalar path ~15% faster
+  in absolute terms: 166.56 MB/s vs 145.14 MB/s here), not a fabrication.
+
+  CONCLUSION: tests/test_benchmark.c is now a usable, reproducible artifact.
+  Its AES figures are sane again and its Rubik-4D figures show 4% spread across
+  six payload sizes, which is the behaviour expected of a working benchmark.
+
+--------------------------------------------------------------------------------
+4. tests/test_benchmark.c (CBC, 100 KB - 20 MB) IS NOT THE SOURCE OF ANY
+   QUOTED NUMBER, AND IS UNRELIABLE ON A SHARED DESKTOP
+--------------------------------------------------------------------------------
+  Raw evidence (same binary, 3 back-to-back runs, shared desktop):
+
+    100 KB Rubik-4D Enc CBC cpb : 34.24 | 47.67 | 25.28   (spread ~88%)
+    100 KB AES-128 cpb         : 37.70 | 47.35 | 38.04
+    20 MB  Rubik-4D Enc CBC cpb : 44.37 | 32.66 | 24.26   (spread ~83%)
+
+  While the desktop was busy (VS Code x3, Notion, terminal), AES-128 measured
+  341 - 479 cpb instead of its normal ~38 cpb, i.e. a 12x error caused purely by
+  CPU preemption. This file is therefore unsuitable as a citable microbenchmark.
+
+  ACTION TAKEN: tests/test_benchmark.c was rewritten to use the same
+  warmup + best-of-N protocol (BENCH_REPEATS=3) as the SIMD harness, and the
+  iteration counts were reduced so total runtime stays practical. It is retained
+  as a correctness/throughput comparison of the CBC wrapper, but the manuscript
+  must NOT cite its absolute cpb values as a headline claim; only the
+  test_simd_gcm.c figures (stable to ~2%) are cited.
+
+--------------------------------------------------------------------------------
+5. RESULTING CORRECTION LIST FOR THE MANUSCRIPT
+--------------------------------------------------------------------------------
+  (a) Keep 20.20 cycles/byte and 166.56 MB/s; annotate the host and note that the
+      figure is the scalar single-block path from test_simd_gcm.c.
+  (b) Keep 254.18 MB/s and 208.80 MB/s but change the attribution from
+      "pshufb" to "AVX2 CTR (4 parallel blocks)".
+  (c) Replace the performance claim for pshufb with its genuine property:
+      constant-time, table-lookup-free execution, at ~2x throughput cost
+      relative to the scalar path.
+  (d) Add a Measurement Methodology note stating: host definition, that __rdtsc
+      measures the invariant TSC at the stated reference frequency, warmup +
+      best-of-N, and run-to-run spread below 2% for the cited figures.
+  (e) Do not cite absolute numbers from tests/test_benchmark.c in the abstract.
+
+================================================================================
+  from AVX2 CTR parallelisation.

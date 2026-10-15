@@ -72,25 +72,26 @@ def encrypt_rounds(plain, key, rounds):
 
 def main():
     print("=" * 80)
-    print("ĐÁNH GIÁ TỐC ĐỘ TĂNG TRƯỞNG BẬC ĐẠI SỐ (ALGEBRAIC DEGREE BOUND)")
+    print("ALGEBRAIC DEGREE GROWTH-BOUND EVALUATION")
     print("=" * 80)
-    print(f"{'Vòng':<8} | {'Bậc đại số lý thuyết':<24} | {'Kháng Higher-Order Differential'}")
+    print(f"{'Round':<8} | {'Theoretical degree':<24} | {'Higher-order differential resistance'}")
     print("-" * 80)
 
-    # S-box AES có bậc đại số d = 7. Kích thước khối 128 bit -> Trần cực đại là n - 1 = 127
+    # The AES S-box has algebraic degree d = 7. For a 128-bit block the maximum
+# attainable degree is n - 1 = 127.
     deg = 1
     for r in range(1, 9):
         deg = min(deg * 7, 127)
         if deg < 32:
-            status = "Dễ bị tấn công vi sai bậc cao"
+            status = "Vulnerable to higher-order differential"
         elif deg < 127:
-            status = "Tiệm cận ngưỡng an toàn"
+            status = "Approaching the safety threshold"
         else:
-            status = "ĐẠT BẬC CỰC ĐẠI (deg = 127)"
-        print(f"Vòng {r:<3} | deg = {deg:<18} | {status}")
+            status = "MAXIMUM DEGREE ATTAINED (deg = 127)"
+        print(f"Round {r:<3} | deg = {deg:<18} | {status}")
 
     print("=" * 80)
-    print("Kết luận: Bậc đại số đạt 127 từ Vòng 3, vô hiệu hóa hoàn toàn các bộ giải SAT / Gröbner.")
+    print("Conclusion: the algebraic degree reaches 127 by round 3, which defeats SAT / Groebner algebraic solvers outright.")
     print("=" * 80)
 
 if __name__ == "__main__":

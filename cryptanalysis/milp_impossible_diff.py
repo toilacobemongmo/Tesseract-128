@@ -131,7 +131,7 @@ def search_impossible_differentials():
                                 sample_trails.append((kf, total_rounds, r1, r2, in_byte, out_byte, contradictions))
         
         elapsed = time.time() - start_time
-        status = "DISTINGUISHER EXISTS" if total_id_count > 0 else "PROVABLY IMMUNE (ZERO ID TRAILS)"
+        status = "DISTINGUISHER EXISTS" if total_id_count > 0 else "NO ID TRAIL FOUND (WITHIN WORD-LEVEL MODEL)"
         print(f"Rounds: {total_rounds} | ID Trails Found: {total_id_count:6d} | Status: {status}")
         for trail in sample_trails:
             kf, R, r1, r2, in_b, out_b, contra = trail

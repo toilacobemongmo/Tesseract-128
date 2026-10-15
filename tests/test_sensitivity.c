@@ -9,7 +9,7 @@
 
 #define ROTL32(v, n) (((v) << (n)) | ((v) >> (32 - (n))))
 
-// AES S-box chuẩn FIPS-197
+// Standard AES S-box (FIPS-197)
 static const uint8_t AES_SBOX[256] = {
     0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76,
     0xca,0x82,0xc9,0x7d,0xfa,0x59,0x47,0xf0,0xad,0xd4,0xa2,0xaf,0x9c,0xa4,0x72,0xc0,
@@ -29,10 +29,10 @@ static const uint8_t AES_SBOX[256] = {
     0x8c,0xa1,0x89,0x0d,0xbf,0xe6,0x42,0x68,0x41,0x99,0x2d,0x0f,0xb0,0x54,0xbb,0x16
 };
 
-// Hàm mã hóa từng vòng Rubik-4D độc lập lưu lại trạng thái sau mỗi vòng
+// Per-round Rubik-4D encryption that records the state after every round
 static void rubik4d_trace_rounds(const rubik4d_ctx *ctx, const uint8_t in[16], uint8_t round_states[9][16]) {
     uint8_t state[16];
-    // Vòng 0: Key Whitening
+    // Round 0: key whitening
     for (int i = 0; i < 16; i++) {
         state[i] = in[i] ^ ctx->round_keys[0][i];
     }
@@ -119,7 +119,7 @@ void run_plaintext_avalanche_test(void) {
         max_diff[r] = 0;
     }
 
-    // Kiểm tra độ tương thích của rubik4d_trace_rounds với rubik4d_encrypt_block_fast
+    // Check that rubik4d_trace_rounds is consistent with rubik4d_encrypt_block_fast
     {
         uint8_t test_k[16], test_p[16], test_c_fast[16], test_states[9][16];
         fill_random(&rng, test_k, 16);
@@ -140,7 +140,7 @@ void run_plaintext_avalanche_test(void) {
         fill_random(&rng, p1, 16);
         memcpy(p2, p1, 16);
 
-        // Lật đúng 1 bit ngẫu nhiên trong bản rõ
+        // Flip exactly one random bit of the plaintext
         int bit_idx = (int)(xoroshiro_next(&rng) % 128);
         p2[bit_idx / 8] ^= (1 << (bit_idx % 8));
 
@@ -212,7 +212,7 @@ void run_key_sensitivity_test(void) {
         fill_random(&rng, k1, 16);
         memcpy(k2, k1, 16);
 
-        // Lật đúng 1 bit ngẫu nhiên trong Master Key
+        // Flip exactly one random bit of the master key
         int bit_idx = (int)(xoroshiro_next(&rng) % 128);
         k2[bit_idx / 8] ^= (1 << (bit_idx % 8));
 

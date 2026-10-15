@@ -21,7 +21,7 @@ int main(void) {
     printf("   TEST SUITE: RUBIK-4D SIMD ACCELERATION & AEAD GCM VERIFICATION\n");
     printf("=================================================================\n\n");
 
-    // 1. Kiểm tra CPU Capabilities
+    // 1. Check CPU capabilities
     printf("[1] CPU Capabilities Detection:\n");
     printf("    - SSSE3 (pshufb) : %s\n", rubik4d_has_ssse3() ? "SUPPORTED (OK)" : "NOT SUPPORTED");
     printf("    - AVX2           : %s\n", rubik4d_has_avx2()  ? "SUPPORTED (OK)" : "NOT SUPPORTED");
@@ -116,7 +116,7 @@ int main(void) {
         printf("    - Tag forgery check : FAIL\n\n");
     }
 
-    // 4. Đo lường hiệu năng Benchmark (Throughput & Speedup)
+    // 4. Performance benchmark (throughput and speedup)
     printf("[4] Hardware Microbenchmarks on 5 MB Payload (50 Iterations)...\n");
     size_t bench_len = 5 * 1024 * 1024;
     uint8_t *bench_in  = (uint8_t*)malloc(bench_len);
